@@ -19,7 +19,7 @@ pub struct SseEvent {
 }
 
 impl SseEvent {
-    /// Check if this is a [DONE] marker.
+    /// Check if this is a `[DONE]` marker.
     pub fn is_done(&self) -> bool {
         self.data == "[DONE]"
     }
