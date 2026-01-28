@@ -3,10 +3,11 @@
 use serde::{Deserialize, Serialize};
 
 /// Agent operating mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentMode {
     /// Full autonomous mode - can plan and execute
+    #[default]
     Autonomous,
     /// Planning only - creates task plans, asks for approval
     Planning,
@@ -16,10 +17,4 @@ pub enum AgentMode {
     Architect,
     /// Ask-only - no code modifications
     AskOnly,
-}
-
-impl Default for AgentMode {
-    fn default() -> Self {
-        Self::Autonomous
-    }
 }
