@@ -248,11 +248,7 @@ fn print_welcome_banner(cli: &Cli, ctx: &AppContext) {
 
     // Show provider info
     if let Some(provider) = ctx.registry.default_provider() {
-        let model = cli
-            .model
-            .as_ref()
-            .map(|m| m.as_str())
-            .unwrap_or(&ctx.config.general.model);
+        let model = cli.model.as_deref().unwrap_or(&ctx.config.general.model);
         println!("[Provider: {} | Model: {}]", provider.name(), model);
     } else {
         println!("[Warning: No provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY]");

@@ -203,10 +203,7 @@ impl ContextManager {
         };
 
         // Get messages after compaction boundary
-        let messages: Vec<Message> = session.messages[session.compact_boundary..]
-            .iter()
-            .cloned()
-            .collect();
+        let messages: Vec<Message> = session.messages[session.compact_boundary..].to_vec();
 
         let estimated_tokens = self.count_tokens(&messages)
             + session

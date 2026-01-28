@@ -63,13 +63,7 @@ impl SseParser {
         let mut events = Vec::new();
 
         // Process complete lines from the buffer
-        loop {
-            // Find the next line ending
-            let newline_pos = match self.buffer.find('\n') {
-                Some(pos) => pos,
-                None => break, // No complete line yet
-            };
-
+        while let Some(newline_pos) = self.buffer.find('\n') {
             // Extract the line (without the newline)
             let line = self.buffer[..newline_pos].to_string();
             // Remove the line from the buffer (including newline)

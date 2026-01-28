@@ -350,6 +350,7 @@ async fn delete_session<S: agentik_session::store::SessionStore>(
 /// Resume a session for the interactive mode.
 ///
 /// This function is called from main.rs when -c or -r flags are used.
+#[allow(dead_code)]
 pub async fn resume_session(id_or_prefix: Option<&str>) -> anyhow::Result<agentik_core::Session> {
     let store = SqliteSessionStore::open_default()?;
     let recovery = SessionRecovery::new(store);

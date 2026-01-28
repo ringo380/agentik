@@ -41,9 +41,7 @@ impl AnthropicProvider {
 
     /// Create from environment variable.
     pub fn from_env() -> Option<Self> {
-        std::env::var("ANTHROPIC_API_KEY")
-            .ok()
-            .map(|key| Self::new(key))
+        std::env::var("ANTHROPIC_API_KEY").ok().map(Self::new)
     }
 
     /// Set the default model.
@@ -651,6 +649,7 @@ struct AnthropicUsage {
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
+#[allow(dead_code)]
 enum StreamEvent {
     #[serde(rename = "message_start")]
     MessageStart { message: Option<serde_json::Value> },
@@ -686,6 +685,7 @@ struct ContentBlock {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ContentDelta {
     #[serde(rename = "type")]
     delta_type: Option<String>,

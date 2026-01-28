@@ -22,7 +22,7 @@ pub async fn handle_command(
     session_id: &str,
 ) -> CommandResult {
     let parts: Vec<&str> = input.split_whitespace().collect();
-    let command = parts.first().map(|s| *s).unwrap_or("");
+    let command = parts.first().copied().unwrap_or("");
     let args = &parts[1..];
 
     match command {

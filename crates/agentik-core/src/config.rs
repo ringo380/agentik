@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use crate::error::Error;
 
 /// Main configuration struct for Agentik.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     /// General settings
@@ -25,19 +25,6 @@ pub struct Config {
     pub sandbox: SandboxConfig,
     /// Provider configurations
     pub providers: ProvidersConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            general: GeneralConfig::default(),
-            display: DisplayConfig::default(),
-            limits: LimitsConfig::default(),
-            permissions: PermissionsConfig::default(),
-            sandbox: SandboxConfig::default(),
-            providers: ProvidersConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,7 +169,7 @@ pub struct ProvidersConfig {
     pub local: Option<LocalProviderConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProviderConfig {
     /// API key (can be set directly or via environment)
@@ -193,17 +180,6 @@ pub struct ProviderConfig {
     pub default_model: Option<String>,
     /// Base URL (optional, for custom endpoints)
     pub base_url: Option<String>,
-}
-
-impl Default for ProviderConfig {
-    fn default() -> Self {
-        Self {
-            api_key: None,
-            api_key_env: None,
-            default_model: None,
-            base_url: None,
-        }
-    }
 }
 
 impl ProviderConfig {
@@ -333,6 +309,7 @@ pub enum IssueSeverity {
 
 impl Config {
     /// Load configuration from all sources.
+    #[allow(clippy::result_large_err)]
     pub fn load() -> Result<Self, figment::Error> {
         let config_dir = Self::config_dir();
         let project_config = PathBuf::from(".agentik/config.toml");

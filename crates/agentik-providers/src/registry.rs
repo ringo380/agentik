@@ -81,13 +81,13 @@ impl ProviderRegistry {
                 .local
                 .as_ref()
                 .and_then(|c| c.base_url.as_ref())
-                .map(|url| LocalProvider::with_url(url))
+                .map(LocalProvider::with_url)
                 .or_else(|| {
                     std::env::var("OLLAMA_HOST")
                         .ok()
                         .map(LocalProvider::with_url)
                 })
-                .unwrap_or_else(LocalProvider::new);
+                .unwrap_or_default();
             registry.register(Arc::new(provider));
         }
 

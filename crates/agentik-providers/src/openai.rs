@@ -42,9 +42,7 @@ impl OpenAIProvider {
 
     /// Create from environment variable.
     pub fn from_env() -> Option<Self> {
-        std::env::var("OPENAI_API_KEY")
-            .ok()
-            .map(|key| Self::new(key))
+        std::env::var("OPENAI_API_KEY").ok().map(Self::new)
     }
 
     /// Set a custom base URL (for OpenRouter, Azure, etc.).
