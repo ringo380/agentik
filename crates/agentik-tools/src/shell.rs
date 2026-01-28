@@ -182,7 +182,7 @@ async fn execute_command(
 
     if !stderr_output.is_empty() {
         if !output.is_empty() {
-            output.push_str("\n");
+            output.push('\n');
         }
         output.push_str("[stderr]\n");
         output.push_str(&stderr_output);
@@ -191,12 +191,9 @@ async fn execute_command(
     // Add exit code if non-zero
     if !status.success() {
         if !output.is_empty() {
-            output.push_str("\n");
+            output.push('\n');
         }
-        output.push_str(&format!(
-            "[exit code: {}]",
-            status.code().unwrap_or(-1)
-        ));
+        output.push_str(&format!("[exit code: {}]", status.code().unwrap_or(-1)));
     }
 
     Ok(output)

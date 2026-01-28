@@ -63,7 +63,11 @@ impl Tool for ReadTool {
     }
 
     fn validate(&self, arguments: &serde_json::Value) -> Result<(), ToolError> {
-        if arguments.get("file_path").and_then(|v| v.as_str()).is_none() {
+        if arguments
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .is_none()
+        {
             return Err(ToolError::missing_param("file_path"));
         }
         Ok(())
@@ -174,7 +178,11 @@ impl Tool for WriteTool {
     }
 
     fn validate(&self, arguments: &serde_json::Value) -> Result<(), ToolError> {
-        if arguments.get("file_path").and_then(|v| v.as_str()).is_none() {
+        if arguments
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .is_none()
+        {
             return Err(ToolError::missing_param("file_path"));
         }
         if arguments.get("content").and_then(|v| v.as_str()).is_none() {
@@ -267,13 +275,25 @@ impl Tool for EditTool {
     }
 
     fn validate(&self, arguments: &serde_json::Value) -> Result<(), ToolError> {
-        if arguments.get("file_path").and_then(|v| v.as_str()).is_none() {
+        if arguments
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .is_none()
+        {
             return Err(ToolError::missing_param("file_path"));
         }
-        if arguments.get("old_string").and_then(|v| v.as_str()).is_none() {
+        if arguments
+            .get("old_string")
+            .and_then(|v| v.as_str())
+            .is_none()
+        {
             return Err(ToolError::missing_param("old_string"));
         }
-        if arguments.get("new_string").and_then(|v| v.as_str()).is_none() {
+        if arguments
+            .get("new_string")
+            .and_then(|v| v.as_str())
+            .is_none()
+        {
             return Err(ToolError::missing_param("new_string"));
         }
         Ok(())
@@ -327,11 +347,7 @@ impl Tool for EditTool {
         tokio::fs::write(&path, &new_content).await?;
 
         let msg = if replace_all && count > 1 {
-            format!(
-                "Replaced {} occurrences in {}",
-                count,
-                path.display()
-            )
+            format!("Replaced {} occurrences in {}", count, path.display())
         } else {
             format!("Successfully edited {}", path.display())
         };
@@ -456,20 +472,15 @@ impl Tool for GlobTool {
 }
 
 /// Output mode for grep results.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GrepOutputMode {
     /// Show matching lines with content
     Content,
     /// Show only file paths that contain matches
+    #[default]
     FilesWithMatches,
     /// Show match counts per file
     Count,
-}
-
-impl Default for GrepOutputMode {
-    fn default() -> Self {
-        Self::FilesWithMatches
-    }
 }
 
 impl GrepOutputMode {
@@ -718,7 +729,10 @@ fn format_grep_results(results: &[GrepMatch], mode: GrepOutputMode, pattern: &st
 
     match mode {
         GrepOutputMode::FilesWithMatches => {
-            let files: Vec<String> = results.iter().map(|r| r.path.display().to_string()).collect();
+            let files: Vec<String> = results
+                .iter()
+                .map(|r| r.path.display().to_string())
+                .collect();
             format!(
                 "Found {} files with matches:\n{}",
                 files.len(),
@@ -726,7 +740,11 @@ fn format_grep_results(results: &[GrepMatch], mode: GrepOutputMode, pattern: &st
             )
         }
         GrepOutputMode::Count => {
-            let mut output = format!("Found {} total matches in {} files:\n", total_matches, results.len());
+            let mut output = format!(
+                "Found {} total matches in {} files:\n",
+                total_matches,
+                results.len()
+            );
             for result in results {
                 output.push_str(&format!(
                     "{}:{}\n",

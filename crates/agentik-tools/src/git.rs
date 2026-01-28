@@ -198,9 +198,9 @@ impl Tool for GitDiffTool {
                 '=' => "=",
                 '>' => ">",
                 '<' => "<",
-                'H' => "",  // File header
-                'F' => "",  // File header
-                'B' => "",  // Binary file
+                'H' => "", // File header
+                'F' => "", // File header
+                'B' => "", // Binary file
                 _ => "",
             };
 
@@ -276,9 +276,8 @@ impl Tool for GitLogTool {
         revwalk.push_head()?;
 
         let mut output = String::new();
-        let mut shown = 0;
 
-        for oid in revwalk {
+        for (shown, oid) in revwalk.enumerate() {
             if shown >= count {
                 break;
             }
@@ -311,8 +310,6 @@ impl Tool for GitLogTool {
                 }
                 output.push('\n');
             }
-
-            shown += 1;
         }
 
         if output.is_empty() {
@@ -462,9 +459,8 @@ impl Tool for GitCommitTool {
 
 /// Open a git repository at the given path.
 fn open_repo(path: &Path) -> Result<Repository, ToolError> {
-    Repository::discover(path).map_err(|e| {
-        ToolError::execution(format!("Failed to open git repository: {}", e))
-    })
+    Repository::discover(path)
+        .map_err(|e| ToolError::execution(format!("Failed to open git repository: {}", e)))
 }
 
 /// Format a git timestamp as a human-readable string.
@@ -605,11 +601,7 @@ mod tests {
         let ctx = ToolContext::new(dir.path());
         let tool = GitAddTool;
 
-        let call = ToolCall::new(
-            "test",
-            "GitAdd",
-            json!({ "files": ["new_file.txt"] }),
-        );
+        let call = ToolCall::new("test", "GitAdd", json!({ "files": ["new_file.txt"] }));
         let result = tool.execute(&call, &ctx).await.unwrap();
 
         assert!(result.success);
@@ -632,11 +624,7 @@ mod tests {
         let ctx = ToolContext::new(dir.path());
         let tool = GitCommitTool;
 
-        let call = ToolCall::new(
-            "test",
-            "GitCommit",
-            json!({ "message": "Add new file" }),
-        );
+        let call = ToolCall::new("test", "GitCommit", json!({ "message": "Add new file" }));
         let result = tool.execute(&call, &ctx).await.unwrap();
 
         assert!(result.success);

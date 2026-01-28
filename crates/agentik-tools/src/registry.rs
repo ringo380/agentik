@@ -229,10 +229,7 @@ impl ToolRegistry {
 
         self.tools.insert(name.clone(), tool);
 
-        self.categories
-            .entry(category)
-            .or_default()
-            .push(name);
+        self.categories.entry(category).or_default().push(name);
     }
 
     /// Get a tool by name.
@@ -341,7 +338,10 @@ mod tests {
             call: &ToolCall,
             _ctx: &ToolContext,
         ) -> Result<ToolResult, ToolError> {
-            Ok(ToolResult::success(&call.id, format!("Executed {}", self.name)))
+            Ok(ToolResult::success(
+                &call.id,
+                format!("Executed {}", self.name),
+            ))
         }
     }
 
