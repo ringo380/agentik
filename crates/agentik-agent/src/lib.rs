@@ -16,6 +16,10 @@ pub mod planning;
 pub mod questions;
 
 pub use agent::Agent;
+pub use executor::{
+    AutoApproveHandler, DenialReason, DenyAllHandler, ExecutorBuilder, PermissionHandler,
+    ToolExecutor,
+};
 pub use modes::AgentMode;
 pub use planning::PlanningState;
 pub use questions::QuestionQueue;
