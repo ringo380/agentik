@@ -5,27 +5,30 @@
 //! - Slash commands
 //! - Streaming response display
 //! - Session management
+//! - Tool execution with approval workflows
 
-use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use futures::StreamExt;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
-use agentik_core::{Message, Session};
-use agentik_providers::CompletionRequest;
+use agentik_agent::{Agent, AgentBuilder, AgentMode, ExecutorBuilder};
+use agentik_core::Session;
 use agentik_session::{SessionStore, SqliteSessionStore};
 
 use crate::{AppContext, Cli};
 
 mod commands;
+mod handlers;
+
+pub use handlers::{CliEventHandler, CliPermissionHandler};
 
 /// Run the interactive REPL.
 pub async fn run(cli: Cli, ctx: Arc<AppContext>) -> anyhow::Result<()> {
     // Initialize session store
     let store = SqliteSessionStore::open_default()?;
+    let store = Arc::new(store) as Arc<dyn SessionStore>;
 
     // Create or resume session
     let session = create_or_resume_session(&cli, &store).await?;
@@ -42,6 +45,13 @@ pub async fn run(cli: Cli, ctx: Arc<AppContext>) -> anyhow::Result<()> {
     );
     println!();
 
+    // Create the agent
+    let mut agent = create_agent(&cli, &ctx, store.clone(), session)?;
+
+    // Show initial mode
+    println!("[Mode: {:?}]", agent.mode());
+    println!();
+
     // Initialize readline editor
     let mut editor = DefaultEditor::new()?;
 
@@ -52,10 +62,15 @@ pub async fn run(cli: Cli, ctx: Arc<AppContext>) -> anyhow::Result<()> {
     }
 
     // Main REPL loop
-    let mut messages: Vec<Message> = session.messages.clone();
-
     loop {
-        let prompt = format!("{}>>> ", if messages.is_empty() { "" } else { "\n" });
+        let prompt = format!(
+            "{}>>> ",
+            if agent.session().messages.is_empty() {
+                ""
+            } else {
+                "\n"
+            }
+        );
 
         match editor.readline(&prompt) {
             Ok(line) => {
@@ -70,7 +85,7 @@ pub async fn run(cli: Cli, ctx: Arc<AppContext>) -> anyhow::Result<()> {
 
                 // Handle slash commands
                 if line.starts_with('/') {
-                    match commands::handle_command(line, &ctx, &store, &session_id).await {
+                    match commands::handle_command(line, &ctx, &store, &mut agent).await {
                         commands::CommandResult::Continue => continue,
                         commands::CommandResult::Exit => break,
                         commands::CommandResult::Error(e) => {
@@ -81,15 +96,14 @@ pub async fn run(cli: Cli, ctx: Arc<AppContext>) -> anyhow::Result<()> {
                 }
 
                 // Process as a message to the AI
-                if let Err(e) =
-                    process_message(line, &mut messages, &ctx, &store, &session_id).await
-                {
+                if let Err(e) = process_message(line, &mut agent).await {
                     eprintln!("Error: {}", e);
                 }
             }
             Err(ReadlineError::Interrupted) => {
                 println!("^C");
-                // Don't exit on Ctrl-C, just cancel current input
+                // Cancel any ongoing operation
+                agent.cancel();
                 continue;
             }
             Err(ReadlineError::Eof) => {
@@ -112,10 +126,64 @@ pub async fn run(cli: Cli, ctx: Arc<AppContext>) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Create the agent with CLI handlers and tools.
+fn create_agent(
+    cli: &Cli,
+    ctx: &AppContext,
+    store: Arc<dyn SessionStore>,
+    session: Session,
+) -> anyhow::Result<Agent> {
+    // Get the provider
+    let provider = ctx.registry.default_provider().ok_or_else(|| {
+        anyhow::anyhow!("No provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
+    })?;
+
+    // Create handlers
+    let event_handler = Arc::new(CliEventHandler::new());
+    let permission_handler = Arc::new(CliPermissionHandler::new());
+
+    // Determine initial mode
+    let mode = if cli.plan {
+        AgentMode::Planning
+    } else {
+        AgentMode::Supervised
+    };
+
+    // Build tool executor with builtins
+    let working_dir = session.metadata.working_directory.clone();
+    let executor = ExecutorBuilder::new()
+        .with_builtins()
+        .working_dir(&working_dir)
+        .permissions(ctx.config.permissions.clone())
+        .mode(mode)
+        .build(permission_handler);
+
+    // Determine model
+    let model = cli
+        .model
+        .clone()
+        .unwrap_or_else(|| ctx.config.general.model.clone());
+
+    // Build the agent
+    let agent = AgentBuilder::new()
+        .provider(provider)
+        .executor(executor)
+        .store(store)
+        .session(session)
+        .model(model)
+        .max_tokens(ctx.config.limits.max_tokens)
+        .temperature(0.7)
+        .event_handler(event_handler)
+        .mode(mode)
+        .build()?;
+
+    Ok(agent)
+}
+
 /// Create a new session or resume an existing one based on CLI flags.
 async fn create_or_resume_session(
     cli: &Cli,
-    store: &SqliteSessionStore,
+    store: &Arc<dyn SessionStore>,
 ) -> anyhow::Result<Session> {
     // Try to resume specific session
     if let Some(ref session_id) = cli.resume {
@@ -168,69 +236,24 @@ async fn create_or_resume_session(
     Ok(session)
 }
 
-/// Process a user message and get a response from the AI.
-async fn process_message(
-    input: &str,
-    messages: &mut Vec<Message>,
-    ctx: &AppContext,
-    store: &SqliteSessionStore,
-    session_id: &str,
-) -> anyhow::Result<()> {
-    // Get the provider
-    let provider = ctx.registry.default_provider().ok_or_else(|| {
-        anyhow::anyhow!("No provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
-    })?;
+/// Process a user message using the agent.
+async fn process_message(input: &str, agent: &mut Agent) -> anyhow::Result<()> {
+    // Reset cancellation for new message
+    agent.reset_cancel();
 
-    // Add user message
-    let user_msg = Message::user(input);
-    store.append_message(session_id, &user_msg).await?;
-    messages.push(user_msg);
-
-    // Determine model
-    let model = ctx.config.general.model.clone();
-
-    // Build request
-    let request = CompletionRequest {
-        model,
-        messages: messages.clone(),
-        max_tokens: ctx.config.limits.max_tokens,
-        temperature: 0.7,
-        system: None,
-        tools: vec![],
-        stop: vec![],
-    };
-
-    // Stream the response
+    // Run the agent - event handler streams text via on_text_delta
     println!();
-    let mut stream = provider.complete_stream(request).await?;
-    let mut response_content = String::new();
-
-    while let Some(chunk_result) = stream.next().await {
-        match chunk_result {
-            Ok(chunk) => {
-                if let Some(delta) = chunk.delta {
-                    print!("{}", delta);
-                    io::stdout().flush()?;
-                    response_content.push_str(&delta);
-                }
-            }
-            Err(e) => {
-                eprintln!("\nStream error: {}", e);
-                break;
-            }
+    match agent.run(input).await {
+        Ok(_response) => {
+            // Response is already streamed via event handler
+            Ok(())
         }
+        Err(agentik_agent::AgentError::Cancelled) => {
+            eprintln!("\n[Operation cancelled]");
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
     }
-
-    println!();
-
-    // Store assistant response
-    if !response_content.is_empty() {
-        let assistant_msg = Message::assistant(&response_content);
-        store.append_message(session_id, &assistant_msg).await?;
-        messages.push(assistant_msg);
-    }
-
-    Ok(())
 }
 
 /// Print the welcome banner.
@@ -242,7 +265,7 @@ fn print_welcome_banner(cli: &Cli, ctx: &AppContext) {
     );
     println!("╠══════════════════════════════════════════════════════════════╣");
     println!("║  Type /help for commands, or start chatting.                 ║");
-    println!("║  Press Ctrl+D to exit.                                       ║");
+    println!("║  Press Ctrl+D to exit, Ctrl+C to cancel.                     ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
 

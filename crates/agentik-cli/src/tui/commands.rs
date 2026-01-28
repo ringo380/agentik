@@ -1,6 +1,9 @@
 //! Slash command handling for the REPL.
 
-use agentik_session::{SessionQuery, SessionStore, SqliteSessionStore};
+use std::sync::Arc;
+
+use agentik_agent::{Agent, AgentMode};
+use agentik_session::{SessionQuery, SessionStore};
 
 use crate::AppContext;
 
@@ -18,8 +21,8 @@ pub enum CommandResult {
 pub async fn handle_command(
     input: &str,
     ctx: &AppContext,
-    store: &SqliteSessionStore,
-    session_id: &str,
+    store: &Arc<dyn SessionStore>,
+    agent: &mut Agent,
 ) -> CommandResult {
     let parts: Vec<&str> = input.split_whitespace().collect();
     let command = parts.first().copied().unwrap_or("");
@@ -39,11 +42,14 @@ pub async fn handle_command(
             print!("\x1B[2J\x1B[1;1H");
             CommandResult::Continue
         }
-        "/session" => handle_session_command(args, store, session_id).await,
+        "/session" => handle_session_command(args, store, agent.session().id()).await,
         "/model" => handle_model_command(args, ctx),
         "/provider" => handle_provider_command(args, ctx),
-        "/status" => print_status(ctx, store, session_id).await,
-        "/history" => handle_history_command(args, store, session_id).await,
+        "/status" => print_status(ctx, store, agent).await,
+        "/history" => handle_history_command(args, store, agent.session().id()).await,
+        "/mode" => handle_mode_command(args, agent),
+        "/tools" => handle_tools_command(args, agent),
+        "/compact" => handle_compact_command(agent).await,
         _ => CommandResult::Error(format!(
             "Unknown command: {}. Type /help for available commands.",
             command
@@ -67,17 +73,31 @@ fn print_help() {
     println!("  /status          Show status information");
     println!("  /history         Show conversation history");
     println!();
+    println!("Agent commands:");
+    println!("  /mode            Show current agent mode");
+    println!("  /mode <mode>     Switch mode (supervised, autonomous, planning, ask)");
+    println!("  /tools           List available tools");
+    println!("  /compact         Trigger context compaction");
+    println!();
+    println!("Tool Approval (when prompted):");
+    println!("  y, yes           Approve this tool call");
+    println!("  n, no            Deny this tool call");
+    println!("  a, always        Approve and auto-approve future calls to this tool");
+    println!("  q, quit          Deny and stop the current operation");
+    println!();
     println!("Tips:");
     println!("  - Press Ctrl+D to exit");
+    println!("  - Press Ctrl+C to cancel current operation");
     println!("  - Use Up/Down arrows for command history");
     println!("  - Start agentik with -c to continue your last session");
     println!("  - Start agentik with -r <id> to resume a specific session");
+    println!("  - Start agentik with --plan for planning mode");
 }
 
 /// Handle /session command.
 async fn handle_session_command(
     args: &[&str],
-    store: &SqliteSessionStore,
+    store: &Arc<dyn SessionStore>,
     session_id: &str,
 ) -> CommandResult {
     match args.first() {
@@ -208,8 +228,8 @@ fn handle_provider_command(args: &[&str], ctx: &AppContext) -> CommandResult {
 /// Print status information.
 async fn print_status(
     ctx: &AppContext,
-    store: &SqliteSessionStore,
-    session_id: &str,
+    store: &Arc<dyn SessionStore>,
+    agent: &Agent,
 ) -> CommandResult {
     println!("Agentik Status");
     println!("==============");
@@ -218,13 +238,18 @@ async fn print_status(
     // Provider info
     if let Some(provider) = ctx.registry.default_provider() {
         println!("Provider: {} ({})", provider.name(), provider.id());
-        println!("Model:    {}", ctx.config.general.model);
+        println!("Model:    {}", agent.config().model);
     } else {
         println!("Provider: Not configured");
     }
     println!();
 
+    // Agent info
+    println!("Mode:     {:?}", agent.mode());
+    println!();
+
     // Session info
+    let session_id = agent.session().id();
     println!("Session:  {}", session_id);
     if let Ok(meta) = store.get_metadata(session_id).await {
         println!("Turns:    {} in session", meta.metrics.turn_count);
@@ -233,6 +258,12 @@ async fn print_status(
             meta.metrics.total_tokens_in, meta.metrics.total_tokens_out
         );
     }
+    println!();
+
+    // Context manager info
+    let context = agent.context_manager();
+    let usage = context.calculate_usage(agent.session());
+    println!("Context tokens: {} ({:.1}% of max)", usage.total_tokens, usage.usage_percent * 100.0);
     println!();
 
     // Config info
@@ -252,7 +283,7 @@ async fn print_status(
 /// Handle /history command.
 async fn handle_history_command(
     args: &[&str],
-    store: &SqliteSessionStore,
+    store: &Arc<dyn SessionStore>,
     session_id: &str,
 ) -> CommandResult {
     let limit = args.first().and_then(|s| s.parse().ok()).unwrap_or(10);
@@ -278,5 +309,84 @@ async fn handle_history_command(
             CommandResult::Continue
         }
         Err(e) => CommandResult::Error(format!("Failed to get history: {}", e)),
+    }
+}
+
+/// Handle /mode command.
+fn handle_mode_command(args: &[&str], agent: &mut Agent) -> CommandResult {
+    if args.is_empty() {
+        // Show current mode and available modes
+        println!("Current mode: {:?}", agent.mode());
+        println!();
+        println!("Available modes:");
+        println!("  supervised   Ask before each tool execution (default)");
+        println!("  autonomous   Execute tools without asking");
+        println!("  planning     Create plans but don't execute");
+        println!("  architect    High-level design without implementation");
+        println!("  ask          Answer questions only, no tool use");
+        CommandResult::Continue
+    } else {
+        let mode = match args[0].to_lowercase().as_str() {
+            "supervised" => AgentMode::Supervised,
+            "autonomous" => AgentMode::Autonomous,
+            "planning" => AgentMode::Planning,
+            "architect" => AgentMode::Architect,
+            "ask" | "askonly" | "ask-only" => AgentMode::AskOnly,
+            other => {
+                return CommandResult::Error(format!(
+                    "Unknown mode: '{}'. Available: supervised, autonomous, planning, architect, ask",
+                    other
+                ));
+            }
+        };
+
+        agent.set_mode(mode);
+        println!("[Mode changed to {:?}]", mode);
+        CommandResult::Continue
+    }
+}
+
+/// Handle /tools command.
+fn handle_tools_command(args: &[&str], _agent: &Agent) -> CommandResult {
+    // Get tools from the agent's context (through executor)
+    // Since we can't directly access the executor, we'll show a message
+    // In a full implementation, we'd expose the tool list through the Agent API
+
+    if args.first() == Some(&"list") || args.is_empty() {
+        println!("Available tools:");
+        println!();
+
+        // The executor is private, but we can at least show built-in tool names
+        println!("Built-in tools:");
+        println!("  Read        Read file contents");
+        println!("  Write       Write content to a file");
+        println!("  Edit        Edit file with search/replace");
+        println!("  Glob        Find files matching a pattern");
+        println!("  Grep        Search file contents");
+        println!("  Bash        Execute shell commands");
+        println!("  ListDir     List directory contents");
+        println!();
+        println!("Use /mode to change how tools are approved:");
+        println!("  supervised  - Ask before each tool (current default)");
+        println!("  autonomous  - Execute without asking");
+
+        CommandResult::Continue
+    } else {
+        CommandResult::Error("Usage: /tools or /tools list".to_string())
+    }
+}
+
+/// Handle /compact command.
+async fn handle_compact_command(agent: &mut Agent) -> CommandResult {
+    println!("[Triggering context compaction...]");
+
+    match agent.compact().await {
+        Ok(()) => {
+            let usage = agent.context_manager().calculate_usage(agent.session());
+            println!("[Context compaction complete]");
+            println!("Current context tokens: {} ({:.1}% of max)", usage.total_tokens, usage.usage_percent * 100.0);
+            CommandResult::Continue
+        }
+        Err(e) => CommandResult::Error(format!("Compaction failed: {}", e)),
     }
 }
