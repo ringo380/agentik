@@ -16,6 +16,7 @@ agentik-tools = { workspace = true }
 
 # Async
 tokio = { workspace = true }
+tokio-util = { version = "0.7", features = ["rt"] }
 async-trait = { workspace = true }
 futures = { workspace = true }
 
@@ -29,6 +30,9 @@ anyhow = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
+
+# Time
+chrono = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

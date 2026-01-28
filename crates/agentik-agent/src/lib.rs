@@ -15,7 +15,10 @@ pub mod modes;
 pub mod planning;
 pub mod questions;
 
-pub use agent::Agent;
+pub use agent::{
+    Agent, AgentBuilder, AgentConfig, AgentError, AgentEventHandler, AgentResponse, AgentResult,
+    NoOpEventHandler, StepResult, TurnUsage,
+};
 pub use executor::{
     AutoApproveHandler, DenialReason, DenyAllHandler, ExecutorBuilder, PermissionHandler,
     ToolExecutor,
