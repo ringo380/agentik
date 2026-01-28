@@ -46,7 +46,10 @@ pub mod recovery;
 pub mod store;
 
 // Re-export commonly used types
-pub use compaction::{CompactionConfig, Compactor, ExtractionResult, SummaryGenerator};
+pub use compaction::{
+    CompactionConfig, CompletionProvider, Compactor, ExtractionResult,
+    LlmSummaryConfig, LlmSummaryGenerator, SimpleSummaryGenerator, SummaryGenerator,
+};
 pub use context::{
     AdditionEstimate, CompactionBoundary, ContextConfig, ContextManager, ContextUsage,
     PreparedContext,

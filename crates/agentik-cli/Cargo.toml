@@ -34,6 +34,7 @@ clap = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 indicatif = { workspace = true }
+rustyline = { workspace = true }
 
 # Syntax highlighting
 syntect = { workspace = true }
@@ -44,6 +45,9 @@ serde_json = { workspace = true }
 
 # Time
 chrono = { workspace = true }
+
+# Paths
+dirs = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }

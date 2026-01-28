@@ -3,13 +3,14 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use futures::{Stream, StreamExt};
+use futures::{stream, Stream, StreamExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 
 use agentik_core::{Message, Role, ToolCall, ToolDefinition, ToolResult};
 
+use crate::sse::SseParser;
 use crate::traits::{
     CompletionRequest, CompletionResponse, FinishReason, ModelInfo, Pricing, Provider,
     StreamChunk, ToolCallDelta, ToolCapable, Usage,
@@ -476,17 +477,62 @@ impl Provider for OpenAIProvider {
             anyhow::bail!("OpenAI API error: {} - {}", status, error_text);
         }
 
-        let stream = response.bytes_stream();
+        let byte_stream = response.bytes_stream();
 
-        let parsed_stream = stream.map(move |chunk| {
-            match chunk {
-                Ok(bytes) => {
-                    let text = String::from_utf8_lossy(&bytes);
-                    parse_sse_chunk(&text)
+        // Use stateful SSE parser to handle line buffering across TCP chunks
+        let parsed_stream = stream::unfold(
+            (byte_stream, SseParser::new()),
+            |(mut byte_stream, mut parser)| async move {
+                loop {
+                    match byte_stream.next().await {
+                        Some(Ok(bytes)) => {
+                            let events = parser.feed(&bytes);
+
+                            // Process all events from this chunk
+                            for event in events {
+                                if event.is_done() {
+                                    // Return final chunk
+                                    return Some((
+                                        Ok(StreamChunk {
+                                            delta: None,
+                                            tool_call_delta: None,
+                                            is_final: true,
+                                            usage: None,
+                                        }),
+                                        (byte_stream, parser),
+                                    ));
+                                }
+
+                                // Parse the event data as OpenAI stream event
+                                match parse_openai_event(&event.data) {
+                                    Ok(Some(chunk)) => {
+                                        return Some((Ok(chunk), (byte_stream, parser)));
+                                    }
+                                    Ok(None) => {
+                                        // Event parsed but no content to emit, continue
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to parse SSE event: {}", e);
+                                        // Continue processing
+                                    }
+                                }
+                            }
+                            // No events to emit from this chunk, continue reading
+                        }
+                        Some(Err(e)) => {
+                            return Some((
+                                Err(anyhow::anyhow!("Stream error: {}", e)),
+                                (byte_stream, parser),
+                            ));
+                        }
+                        None => {
+                            // Stream ended
+                            return None;
+                        }
+                    }
                 }
-                Err(e) => Err(anyhow::anyhow!("Stream error: {}", e)),
-            }
-        });
+            },
+        );
 
         Ok(Box::pin(parsed_stream))
     }
@@ -509,60 +555,47 @@ impl ToolCapable for OpenAIProvider {
     }
 }
 
-/// Parse SSE chunk from OpenAI stream.
-fn parse_sse_chunk(text: &str) -> anyhow::Result<StreamChunk> {
-    let mut delta_parts = Vec::new();
-    let mut tool_call_delta = None;
-    let mut is_final = false;
+/// Parse an OpenAI stream event from JSON data.
+fn parse_openai_event(data: &str) -> anyhow::Result<Option<StreamChunk>> {
+    let chunk: StreamChunkResponse = serde_json::from_str(data)?;
 
-    for line in text.lines() {
-        if line.starts_with("data: ") {
-            let data = &line[6..];
-            if data == "[DONE]" {
-                is_final = true;
-                continue;
+    if let Some(choice) = chunk.choices.first() {
+        let mut delta_text = None;
+        let mut tool_call_delta = None;
+        let is_final = choice.finish_reason.is_some();
+
+        if let Some(ref d) = choice.delta {
+            // Extract content delta
+            if let Some(ref content) = d.content {
+                delta_text = Some(content.clone());
             }
 
-            if let Ok(chunk) = serde_json::from_str::<StreamChunkResponse>(data) {
-                if let Some(choice) = chunk.choices.first() {
-                    if let Some(ref d) = choice.delta {
-                        // Concatenate all content deltas in this chunk
-                        if let Some(ref content) = d.content {
-                            delta_parts.push(content.clone());
-                        }
-
-                        if let Some(ref tcs) = d.tool_calls {
-                            if let Some(tc) = tcs.first() {
-                                tool_call_delta = Some(ToolCallDelta {
-                                    id: tc.id.clone(),
-                                    name: tc.function.as_ref().and_then(|f| f.name.clone()),
-                                    arguments: tc.function.as_ref().and_then(|f| f.arguments.clone()),
-                                });
-                            }
-                        }
-                    }
-
-                    if choice.finish_reason.is_some() {
-                        is_final = true;
-                    }
+            // Extract tool call delta
+            if let Some(ref tcs) = d.tool_calls {
+                if let Some(tc) = tcs.first() {
+                    tool_call_delta = Some(ToolCallDelta {
+                        id: tc.id.clone(),
+                        name: tc.function.as_ref().and_then(|f| f.name.clone()),
+                        arguments: tc.function.as_ref().and_then(|f| f.arguments.clone()),
+                    });
                 }
             }
         }
-    }
 
-    // Combine all delta parts
-    let delta = if delta_parts.is_empty() {
-        None
+        // Only return a chunk if we have something to emit
+        if delta_text.is_some() || tool_call_delta.is_some() || is_final {
+            Ok(Some(StreamChunk {
+                delta: delta_text,
+                tool_call_delta,
+                is_final,
+                usage: None,
+            }))
+        } else {
+            Ok(None)
+        }
     } else {
-        Some(delta_parts.join(""))
-    };
-
-    Ok(StreamChunk {
-        delta,
-        tool_call_delta,
-        is_final,
-        usage: None,
-    })
+        Ok(None)
+    }
 }
 
 // OpenAI API types

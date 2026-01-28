@@ -158,6 +158,11 @@ impl ProviderRegistry {
         self.providers.keys().map(|s| s.as_str()).collect()
     }
 
+    /// Iterate over all registered providers.
+    pub fn providers(&self) -> impl Iterator<Item = &Arc<dyn Provider>> {
+        self.providers.values()
+    }
+
     /// Get all available models across all providers.
     pub fn all_models(&self) -> Vec<ModelInfo> {
         self.providers

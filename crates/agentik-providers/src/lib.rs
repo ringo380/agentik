@@ -13,10 +13,12 @@ pub mod anthropic;
 pub mod local;
 pub mod openai;
 pub mod registry;
+pub mod sse;
 pub mod traits;
 
 pub use anthropic::AnthropicProvider;
 pub use local::LocalProvider;
 pub use openai::OpenAIProvider;
 pub use registry::ProviderRegistry;
+pub use sse::{SseEvent, SseParser};
 pub use traits::{CompletionRequest, CompletionResponse, ModelInfo, Pricing, Provider, StreamChunk, ToolCapable};

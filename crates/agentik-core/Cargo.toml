@@ -29,5 +29,8 @@ chrono = { workspace = true }
 # Async
 async-trait = { workspace = true }
 
+# Logging
+tracing = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true }

@@ -3,13 +3,14 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use futures::{Stream, StreamExt};
+use futures::{stream, Stream, StreamExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 
 use agentik_core::{Message, Role, ToolCall, ToolDefinition, ToolResult};
 
+use crate::sse::SseParser;
 use crate::traits::{
     CompletionRequest, CompletionResponse, FinishReason, ModelInfo, Pricing, Provider,
     StreamChunk, ToolCallDelta, ToolCapable, Usage,
@@ -383,18 +384,62 @@ impl Provider for AnthropicProvider {
             anyhow::bail!("Anthropic API error: {} - {}", status, error_text);
         }
 
-        let stream = response.bytes_stream();
+        let byte_stream = response.bytes_stream();
 
-        // Parse SSE stream
-        let parsed_stream = stream.map(move |chunk| {
-            match chunk {
-                Ok(bytes) => {
-                    let text = String::from_utf8_lossy(&bytes);
-                    parse_sse_chunk(&text)
+        // Use stateful SSE parser to handle line buffering across TCP chunks
+        let parsed_stream = stream::unfold(
+            (byte_stream, SseParser::new()),
+            |(mut byte_stream, mut parser)| async move {
+                loop {
+                    match byte_stream.next().await {
+                        Some(Ok(bytes)) => {
+                            let events = parser.feed(&bytes);
+
+                            // Process all events from this chunk
+                            for event in events {
+                                if event.is_done() {
+                                    // Return final chunk
+                                    return Some((
+                                        Ok(StreamChunk {
+                                            delta: None,
+                                            tool_call_delta: None,
+                                            is_final: true,
+                                            usage: None,
+                                        }),
+                                        (byte_stream, parser),
+                                    ));
+                                }
+
+                                // Parse the event data as Anthropic stream event
+                                match parse_anthropic_event(&event.data) {
+                                    Ok(Some(chunk)) => {
+                                        return Some((Ok(chunk), (byte_stream, parser)));
+                                    }
+                                    Ok(None) => {
+                                        // Event parsed but no content to emit, continue
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to parse SSE event: {}", e);
+                                        // Continue processing
+                                    }
+                                }
+                            }
+                            // No events to emit from this chunk, continue reading
+                        }
+                        Some(Err(e)) => {
+                            return Some((
+                                Err(anyhow::anyhow!("Stream error: {}", e)),
+                                (byte_stream, parser),
+                            ));
+                        }
+                        None => {
+                            // Stream ended
+                            return None;
+                        }
+                    }
                 }
-                Err(e) => Err(anyhow::anyhow!("Stream error: {}", e)),
-            }
-        });
+            },
+        );
 
         Ok(Box::pin(parsed_stream))
     }
@@ -419,68 +464,110 @@ impl ToolCapable for AnthropicProvider {
     }
 }
 
-/// Parse a Server-Sent Events chunk.
-fn parse_sse_chunk(text: &str) -> anyhow::Result<StreamChunk> {
-    let mut delta = None;
-    let mut tool_call_delta = None;
-    let mut is_final = false;
-    let mut usage = None;
+/// Parse an Anthropic stream event from JSON data.
+fn parse_anthropic_event(data: &str) -> anyhow::Result<Option<StreamChunk>> {
+    let event: StreamEvent = serde_json::from_str(data)?;
 
-    for line in text.lines() {
-        if line.starts_with("data: ") {
-            let data = &line[6..];
-            if data == "[DONE]" {
-                is_final = true;
-                continue;
-            }
+    match event {
+        StreamEvent::ContentBlockDelta { delta: d, .. } => {
+            let text_delta = d.text;
+            let tool_delta = if d.partial_json.is_some() {
+                Some(ToolCallDelta {
+                    id: None,
+                    name: None,
+                    arguments: d.partial_json,
+                })
+            } else {
+                None
+            };
 
-            if let Ok(event) = serde_json::from_str::<StreamEvent>(data) {
-                match event {
-                    StreamEvent::ContentBlockDelta { delta: d, .. } => {
-                        if let Some(text) = d.text {
-                            delta = Some(text);
-                        }
-                        if d.partial_json.is_some() {
-                            tool_call_delta = Some(ToolCallDelta {
-                                id: None,
-                                name: None,
-                                arguments: d.partial_json,
-                            });
-                        }
-                    }
-                    StreamEvent::ContentBlockStart { content_block, .. } => {
-                        if content_block.block_type == "tool_use" {
-                            tool_call_delta = Some(ToolCallDelta {
-                                id: content_block.id,
-                                name: content_block.name,
-                                arguments: None,
-                            });
-                        }
-                    }
-                    StreamEvent::MessageDelta { usage: u, .. } => {
-                        if let Some(u) = u {
-                            usage = Some(Usage {
-                                input_tokens: 0,
-                                output_tokens: u.output_tokens,
-                                cached_tokens: 0,
-                            });
-                        }
-                    }
-                    StreamEvent::MessageStop => {
-                        is_final = true;
-                    }
-                    _ => {}
-                }
+            if text_delta.is_some() || tool_delta.is_some() {
+                Ok(Some(StreamChunk {
+                    delta: text_delta,
+                    tool_call_delta: tool_delta,
+                    is_final: false,
+                    usage: None,
+                }))
+            } else {
+                Ok(None)
             }
         }
+        StreamEvent::ContentBlockStart { content_block, .. } => {
+            if content_block.block_type == "tool_use" {
+                Ok(Some(StreamChunk {
+                    delta: None,
+                    tool_call_delta: Some(ToolCallDelta {
+                        id: content_block.id,
+                        name: content_block.name,
+                        arguments: None,
+                    }),
+                    is_final: false,
+                    usage: None,
+                }))
+            } else if content_block.block_type == "text" {
+                // Text block start, might have initial text
+                if let Some(text) = content_block.text {
+                    Ok(Some(StreamChunk {
+                        delta: Some(text),
+                        tool_call_delta: None,
+                        is_final: false,
+                        usage: None,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(None)
+            }
+        }
+        StreamEvent::MessageDelta { usage: u, .. } => {
+            if let Some(u) = u {
+                Ok(Some(StreamChunk {
+                    delta: None,
+                    tool_call_delta: None,
+                    is_final: false,
+                    usage: Some(Usage {
+                        input_tokens: 0,
+                        output_tokens: u.output_tokens,
+                        cached_tokens: 0,
+                    }),
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+        StreamEvent::MessageStop => Ok(Some(StreamChunk {
+            delta: None,
+            tool_call_delta: None,
+            is_final: true,
+            usage: None,
+        })),
+        StreamEvent::MessageStart { message } => {
+            // Extract input token count from message_start
+            if let Some(msg) = message {
+                if let Some(usage) = msg.get("usage") {
+                    if let Some(input_tokens) = usage.get("input_tokens").and_then(|v| v.as_u64()) {
+                        return Ok(Some(StreamChunk {
+                            delta: None,
+                            tool_call_delta: None,
+                            is_final: false,
+                            usage: Some(Usage {
+                                input_tokens: input_tokens as u32,
+                                output_tokens: 0,
+                                cached_tokens: 0,
+                            }),
+                        }));
+                    }
+                }
+            }
+            Ok(None)
+        }
+        StreamEvent::ContentBlockStop { .. } => Ok(None),
+        StreamEvent::Ping => Ok(None),
+        StreamEvent::Error { error } => {
+            Err(anyhow::anyhow!("Anthropic stream error: {:?}", error))
+        }
     }
-
-    Ok(StreamChunk {
-        delta,
-        tool_call_delta,
-        is_final,
-        usage,
-    })
 }
 
 // Anthropic API types

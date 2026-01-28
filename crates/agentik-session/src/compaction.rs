@@ -485,6 +485,130 @@ impl SummaryGenerator for SimpleSummaryGenerator {
     }
 }
 
+/// Configuration for LLM-based summary generation.
+#[derive(Debug, Clone)]
+pub struct LlmSummaryConfig {
+    /// Model to use for summarization (prefer fast/cheap models)
+    pub model: String,
+    /// Maximum tokens for the generated summary
+    pub max_tokens: u32,
+    /// Temperature for generation (lower = more focused)
+    pub temperature: f32,
+    /// System prompt for the summarizer
+    pub system_prompt: String,
+}
+
+impl Default for LlmSummaryConfig {
+    fn default() -> Self {
+        Self {
+            model: "claude-haiku-3-5-20241022".to_string(),
+            max_tokens: 1000,
+            temperature: 0.3,
+            system_prompt: "You are a precise summarizer. Create concise summaries that capture \
+                            the essential information from conversations. Focus on: what was \
+                            requested, what actions were taken, and the current state. Be factual \
+                            and specific. Keep summaries under 500 words.".to_string(),
+        }
+    }
+}
+
+/// LLM-based summary generator that uses a provider.
+///
+/// This generator calls an LLM to create intelligent summaries of conversation
+/// history, preserving context while reducing token usage.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use agentik_session::compaction::{LlmSummaryGenerator, LlmSummaryConfig};
+/// use agentik_providers::AnthropicProvider;
+/// use std::sync::Arc;
+///
+/// let provider = Arc::new(AnthropicProvider::from_env().unwrap());
+/// let generator = LlmSummaryGenerator::new(provider, LlmSummaryConfig::default());
+///
+/// // Use with Compactor::compact_with_generator
+/// ```
+pub struct LlmSummaryGenerator<P> {
+    provider: std::sync::Arc<P>,
+    config: LlmSummaryConfig,
+    compaction_config: CompactionConfig,
+}
+
+impl<P> LlmSummaryGenerator<P> {
+    /// Create a new LLM summary generator.
+    pub fn new(provider: std::sync::Arc<P>, config: LlmSummaryConfig) -> Self {
+        Self {
+            provider,
+            config,
+            compaction_config: CompactionConfig::default(),
+        }
+    }
+
+    /// Create with custom compaction config.
+    pub fn with_compaction_config(mut self, config: CompactionConfig) -> Self {
+        self.compaction_config = config;
+        self
+    }
+
+    /// Build the summarization prompt.
+    fn build_prompt(
+        &self,
+        messages: &[Message],
+        extraction: &ExtractionResult,
+        previous_summary: Option<&CompactedSummary>,
+    ) -> String {
+        let compactor = Compactor::with_config(
+            self.compaction_config.clone(),
+            ContextManager::new(),
+        );
+        compactor.build_summary_prompt(messages, extraction, previous_summary)
+    }
+}
+
+/// Trait alias for providers that support completion.
+pub trait CompletionProvider: Send + Sync {
+    /// Generate a completion for the given prompt.
+    fn complete_for_summary(
+        &self,
+        model: &str,
+        system: &str,
+        prompt: &str,
+        max_tokens: u32,
+        temperature: f32,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + '_>>;
+}
+
+#[async_trait::async_trait]
+impl<P: CompletionProvider> SummaryGenerator for LlmSummaryGenerator<P> {
+    async fn generate_summary(
+        &self,
+        messages: &[Message],
+        extraction: &ExtractionResult,
+        previous_summary: Option<&CompactedSummary>,
+    ) -> anyhow::Result<String> {
+        let prompt = self.build_prompt(messages, extraction, previous_summary);
+
+        // Call the provider to generate the summary
+        let response = self.provider.complete_for_summary(
+            &self.config.model,
+            &self.config.system_prompt,
+            &prompt,
+            self.config.max_tokens,
+            self.config.temperature,
+        ).await?;
+
+        // Post-process: ensure the summary isn't too long
+        let summary = if response.len() > 2000 {
+            format!("{}...", &response[..1997])
+        } else {
+            response
+        };
+
+        Ok(summary)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

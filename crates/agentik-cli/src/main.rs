@@ -210,11 +210,16 @@ async fn main() -> anyhow::Result<()> {
         .with(filter)
         .init();
 
-    // Load configuration
-    let config = Config::load().unwrap_or_else(|e| {
-        tracing::warn!("Failed to load config, using defaults: {}", e);
-        Config::default()
-    });
+    // Load and validate configuration
+    let config = match Config::load_validated() {
+        Ok(c) => c,
+        Err(e) => {
+            // If validation fails, log the error but try to continue with defaults
+            tracing::error!("Configuration error: {}", e);
+            tracing::warn!("Using default configuration");
+            Config::default()
+        }
+    };
 
     // Initialize provider registry
     let registry = ProviderRegistry::from_config(&config);
