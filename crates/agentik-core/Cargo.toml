@@ -1,0 +1,33 @@
+[package]
+name = "agentik-core"
+description = "Core types and abstractions for Agentik"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+
+# Configuration
+figment = { workspace = true }
+dirs = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# Async
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

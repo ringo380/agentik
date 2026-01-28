@@ -1,0 +1,56 @@
+[package]
+name = "agentik-cli"
+description = "CLI application for Agentik"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "agentik"
+path = "src/main.rs"
+
+[dependencies]
+# Internal crates
+agentik-core = { workspace = true }
+agentik-providers = { workspace = true }
+agentik-session = { workspace = true }
+agentik-agent = { workspace = true }
+agentik-tools = { workspace = true }
+agentik-mcp = { workspace = true }
+agentik-repomap = { workspace = true }
+agentik-metrics = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+futures = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+
+# TUI
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+indicatif = { workspace = true }
+
+# Syntax highlighting
+syntect = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

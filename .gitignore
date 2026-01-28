@@ -1,0 +1,35 @@
+# Rust
+/target/
+Cargo.lock
+
+# TypeScript
+node_modules/
+mcp-servers/build/
+mcp-servers/*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Project local config
+.agentik/config.local.toml
+
+# Build artifacts
+*.log
+*.tmp
+
+# Test artifacts
+coverage/
+.nyc_output/

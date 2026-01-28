@@ -1,0 +1,42 @@
+[package]
+name = "agentik-tools"
+description = "Built-in tool implementations for Agentik"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+agentik-core = { workspace = true }
+
+# Async
+tokio = { workspace = true, features = ["process", "fs"] }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# File operations
+walkdir = "2"
+ignore = "0.4"
+globset = "0.4"
+
+# Git
+git2 = "0.19"
+
+# Logging
+tracing = { workspace = true }
+
+# Utilities
+regex = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = "3"

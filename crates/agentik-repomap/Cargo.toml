@@ -1,0 +1,47 @@
+[package]
+name = "agentik-repomap"
+description = "Repository mapping and code analysis for Agentik"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+agentik-core = { workspace = true }
+
+# Tree-sitter for parsing
+tree-sitter = { workspace = true }
+tree-sitter-rust = "0.23"
+tree-sitter-python = "0.23"
+tree-sitter-javascript = "0.23"
+tree-sitter-typescript = "0.23"
+tree-sitter-go = "0.23"
+tree-sitter-java = "0.23"
+
+# Async
+tokio = { workspace = true, features = ["fs"] }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# File watching
+notify = "6"
+
+# File operations
+walkdir = "2"
+ignore = "0.4"
+
+# Logging
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = "3"
