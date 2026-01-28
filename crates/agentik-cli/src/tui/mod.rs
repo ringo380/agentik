@@ -81,7 +81,8 @@ pub async fn run(cli: Cli, ctx: Arc<AppContext>) -> anyhow::Result<()> {
                 }
 
                 // Process as a message to the AI
-                if let Err(e) = process_message(line, &mut messages, &ctx, &store, &session_id).await
+                if let Err(e) =
+                    process_message(line, &mut messages, &ctx, &store, &session_id).await
                 {
                     eprintln!("Error: {}", e);
                 }
@@ -135,7 +136,11 @@ async fn create_or_resume_session(
                     anyhow::bail!(
                         "Ambiguous session ID '{}'. Matches: {}",
                         session_id,
-                        matches.iter().map(|s| &s.id[..8]).collect::<Vec<_>>().join(", ")
+                        matches
+                            .iter()
+                            .map(|s| &s.id[..8])
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     );
                 } else {
                     anyhow::bail!("Session '{}' not found", session_id);

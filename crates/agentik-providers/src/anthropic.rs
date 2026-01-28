@@ -12,8 +12,8 @@ use agentik_core::{Message, Role, ToolCall, ToolDefinition, ToolResult};
 
 use crate::sse::SseParser;
 use crate::traits::{
-    CompletionRequest, CompletionResponse, FinishReason, ModelInfo, Pricing, Provider,
-    StreamChunk, ToolCallDelta, ToolCapable, Usage,
+    CompletionRequest, CompletionResponse, FinishReason, ModelInfo, Pricing, Provider, StreamChunk,
+    ToolCallDelta, ToolCapable, Usage,
 };
 
 /// Anthropic API base URL.
@@ -73,9 +73,10 @@ impl AnthropicProvider {
             agentik_core::Content::Text(text) => {
                 vec![AnthropicContent::Text { text: text.clone() }]
             }
-            agentik_core::Content::Parts(parts) => {
-                parts.iter().filter_map(|p| self.convert_content_part(p)).collect()
-            }
+            agentik_core::Content::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| self.convert_content_part(p))
+                .collect(),
         };
 
         // Add tool results if this is a tool message
@@ -141,9 +142,10 @@ impl AnthropicProvider {
     /// Format tool results as content blocks.
     fn format_tool_results_content(&self, message: &Message) -> Vec<AnthropicContent> {
         match &message.content {
-            agentik_core::Content::Parts(parts) => {
-                parts.iter().filter_map(|p| self.convert_content_part(p)).collect()
-            }
+            agentik_core::Content::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| self.convert_content_part(p))
+                .collect(),
             agentik_core::Content::Text(text) => {
                 vec![AnthropicContent::Text { text: text.clone() }]
             }
@@ -151,7 +153,11 @@ impl AnthropicProvider {
     }
 
     /// Extract system prompt from messages.
-    fn extract_system(&self, messages: &[Message], explicit_system: Option<&str>) -> Option<String> {
+    fn extract_system(
+        &self,
+        messages: &[Message],
+        explicit_system: Option<&str>,
+    ) -> Option<String> {
         if let Some(sys) = explicit_system {
             return Some(sys.to_string());
         }
@@ -457,9 +463,7 @@ impl ToolCapable for AnthropicProvider {
     fn format_tool_results(&self, results: &[ToolResult]) -> Vec<Message> {
         results
             .iter()
-            .map(|r| {
-                Message::tool_result(r.tool_call_id.clone(), &r.output, !r.success)
-            })
+            .map(|r| Message::tool_result(r.tool_call_id.clone(), &r.output, !r.success))
             .collect()
     }
 }
@@ -564,9 +568,7 @@ fn parse_anthropic_event(data: &str) -> anyhow::Result<Option<StreamChunk>> {
         }
         StreamEvent::ContentBlockStop { .. } => Ok(None),
         StreamEvent::Ping => Ok(None),
-        StreamEvent::Error { error } => {
-            Err(anyhow::anyhow!("Anthropic stream error: {:?}", error))
-        }
+        StreamEvent::Error { error } => Err(anyhow::anyhow!("Anthropic stream error: {:?}", error)),
     }
 }
 
@@ -651,23 +653,16 @@ struct AnthropicUsage {
 #[serde(tag = "type")]
 enum StreamEvent {
     #[serde(rename = "message_start")]
-    MessageStart {
-        message: Option<serde_json::Value>,
-    },
+    MessageStart { message: Option<serde_json::Value> },
     #[serde(rename = "content_block_start")]
     ContentBlockStart {
         index: usize,
         content_block: ContentBlock,
     },
     #[serde(rename = "content_block_delta")]
-    ContentBlockDelta {
-        index: usize,
-        delta: ContentDelta,
-    },
+    ContentBlockDelta { index: usize, delta: ContentDelta },
     #[serde(rename = "content_block_stop")]
-    ContentBlockStop {
-        index: usize,
-    },
+    ContentBlockStop { index: usize },
     #[serde(rename = "message_delta")]
     MessageDelta {
         delta: Option<serde_json::Value>,
@@ -678,9 +673,7 @@ enum StreamEvent {
     #[serde(rename = "ping")]
     Ping,
     #[serde(rename = "error")]
-    Error {
-        error: serde_json::Value,
-    },
+    Error { error: serde_json::Value },
 }
 
 #[derive(Debug, Deserialize)]
@@ -725,10 +718,7 @@ mod tests {
     fn test_format_messages() {
         let provider = AnthropicProvider::new("test-key");
 
-        let messages = vec![
-            Message::user("Hello"),
-            Message::assistant("Hi there!"),
-        ];
+        let messages = vec![Message::user("Hello"), Message::assistant("Hi there!")];
 
         let formatted = provider.format_messages(&messages);
         assert_eq!(formatted.len(), 2);

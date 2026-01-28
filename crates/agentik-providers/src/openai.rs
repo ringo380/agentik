@@ -12,8 +12,8 @@ use agentik_core::{Message, Role, ToolCall, ToolDefinition, ToolResult};
 
 use crate::sse::SseParser;
 use crate::traits::{
-    CompletionRequest, CompletionResponse, FinishReason, ModelInfo, Pricing, Provider,
-    StreamChunk, ToolCallDelta, ToolCapable, Usage,
+    CompletionRequest, CompletionResponse, FinishReason, ModelInfo, Pricing, Provider, StreamChunk,
+    ToolCallDelta, ToolCapable, Usage,
 };
 
 /// Default OpenAI API base URL.
@@ -67,10 +67,7 @@ impl OpenAIProvider {
 
     /// Convert internal messages to OpenAI format.
     fn format_messages(&self, messages: &[Message]) -> Vec<OpenAIMessage> {
-        messages
-            .iter()
-            .map(|m| self.convert_message(m))
-            .collect()
+        messages.iter().map(|m| self.convert_message(m)).collect()
     }
 
     /// Convert a single message to OpenAI format.
@@ -84,14 +81,12 @@ impl OpenAIProvider {
 
         let content = match &message.content {
             agentik_core::Content::Text(text) => OpenAIContent::Text(text.clone()),
-            agentik_core::Content::Parts(parts) => {
-                OpenAIContent::Parts(
-                    parts
-                        .iter()
-                        .filter_map(|p| self.convert_content_part(p))
-                        .collect(),
-                )
-            }
+            agentik_core::Content::Parts(parts) => OpenAIContent::Parts(
+                parts
+                    .iter()
+                    .filter_map(|p| self.convert_content_part(p))
+                    .collect(),
+            ),
         };
 
         // Handle tool calls for assistant messages
@@ -237,13 +232,17 @@ impl OpenAIProvider {
             })
             .unwrap_or(FinishReason::Stop);
 
-        let usage = response.usage.map(|u| Usage {
-            input_tokens: u.prompt_tokens,
-            output_tokens: u.completion_tokens,
-            cached_tokens: u.prompt_tokens_details
-                .map(|d| d.cached_tokens)
-                .unwrap_or(0),
-        }).unwrap_or_default();
+        let usage = response
+            .usage
+            .map(|u| Usage {
+                input_tokens: u.prompt_tokens,
+                output_tokens: u.completion_tokens,
+                cached_tokens: u
+                    .prompt_tokens_details
+                    .map(|d| d.cached_tokens)
+                    .unwrap_or(0),
+            })
+            .unwrap_or_default();
 
         CompletionResponse {
             content,
@@ -752,8 +751,8 @@ mod tests {
 
     #[test]
     fn test_custom_base_url() {
-        let provider = OpenAIProvider::new("test-key")
-            .with_base_url("https://openrouter.ai/api/v1");
+        let provider =
+            OpenAIProvider::new("test-key").with_base_url("https://openrouter.ai/api/v1");
         assert_eq!(provider.base_url, "https://openrouter.ai/api/v1");
     }
 }

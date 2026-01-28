@@ -85,10 +85,7 @@ pub enum ContentPart {
 pub enum ImageSource {
     /// Base64-encoded image
     #[serde(rename = "base64")]
-    Base64 {
-        media_type: String,
-        data: String,
-    },
+    Base64 { media_type: String, data: String },
     /// URL reference
     #[serde(rename = "url")]
     Url { url: String },

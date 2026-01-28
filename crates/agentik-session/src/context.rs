@@ -25,11 +25,11 @@ pub struct ContextConfig {
 impl Default for ContextConfig {
     fn default() -> Self {
         Self {
-            max_context_tokens: 200_000,      // Claude's context window
-            compaction_threshold: 0.80,        // Trigger at 80%
-            min_recent_tokens: 20_000,         // Reserve 20K for recent context
-            preserve_recent_messages: 10,      // Always keep last 10 messages
-            chars_per_token: 4.0,              // Rough estimate
+            max_context_tokens: 200_000,  // Claude's context window
+            compaction_threshold: 0.80,   // Trigger at 80%
+            min_recent_tokens: 20_000,    // Reserve 20K for recent context
+            preserve_recent_messages: 10, // Always keep last 10 messages
+            chars_per_token: 4.0,         // Rough estimate
         }
     }
 }
@@ -136,11 +136,7 @@ impl ContextManager {
     /// Count tokens in a summary.
     pub fn count_summary_tokens(&self, summary: &CompactedSummary) -> u32 {
         let text_chars = summary.text.len() as f32;
-        let decisions_chars: f32 = summary
-            .key_decisions
-            .iter()
-            .map(|d| d.len() as f32)
-            .sum();
+        let decisions_chars: f32 = summary.key_decisions.iter().map(|d| d.len() as f32).sum();
         let files_chars: f32 = summary
             .modified_files
             .iter()
@@ -299,7 +295,8 @@ impl ContextManager {
         // Don't compact past the current boundary
         let effective_boundary = boundary.max(session.compact_boundary);
 
-        let tokens_to_compact = self.count_tokens(&messages[session.compact_boundary..effective_boundary]);
+        let tokens_to_compact =
+            self.count_tokens(&messages[session.compact_boundary..effective_boundary]);
         let messages_to_compact = effective_boundary - session.compact_boundary;
 
         CompactionBoundary {
@@ -380,7 +377,10 @@ mod tests {
             let msg = if i % 2 == 0 {
                 Message::user(format!("User message {}", i))
             } else {
-                Message::assistant(format!("Assistant response {} with some longer content to simulate real responses", i))
+                Message::assistant(format!(
+                    "Assistant response {} with some longer content to simulate real responses",
+                    i
+                ))
             };
             session.messages.push(msg);
         }

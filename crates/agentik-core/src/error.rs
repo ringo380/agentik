@@ -158,9 +158,9 @@ impl ProviderError {
     /// Get a recovery suggestion for this error.
     pub fn recovery_suggestion(&self) -> Option<&'static str> {
         match self {
-            ProviderError::NotConfigured { env_var: Some(_), .. } => {
-                Some("Set the API key environment variable")
-            }
+            ProviderError::NotConfigured {
+                env_var: Some(_), ..
+            } => Some("Set the API key environment variable"),
             ProviderError::NotConfigured { .. } => {
                 Some("Configure the provider in ~/.config/agentik/config.toml")
             }
@@ -170,21 +170,17 @@ impl ProviderError {
             ProviderError::ApiError { status: 429, .. } => {
                 Some("You've hit rate limits. Wait a moment and try again")
             }
-            ProviderError::ApiError { status: 500..=599, .. } => {
-                Some("The API service is having issues. Try again later")
-            }
-            ProviderError::ModelNotFound { .. } => {
-                Some("Use '/model' to see available models")
-            }
+            ProviderError::ApiError {
+                status: 500..=599, ..
+            } => Some("The API service is having issues. Try again later"),
+            ProviderError::ModelNotFound { .. } => Some("Use '/model' to see available models"),
             ProviderError::ContentFiltered { .. } => {
                 Some("Rephrase your request to avoid triggering content filters")
             }
             ProviderError::Timeout { .. } => {
                 Some("Try a simpler request or check your network connection")
             }
-            ProviderError::NetworkError { .. } => {
-                Some("Check your internet connection")
-            }
+            ProviderError::NetworkError { .. } => Some("Check your internet connection"),
             _ => None,
         }
     }

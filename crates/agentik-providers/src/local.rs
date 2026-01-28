@@ -13,10 +13,10 @@ use tracing::debug;
 
 use agentik_core::{Message, ToolCall, ToolDefinition, ToolResult};
 
+use crate::openai::OpenAIProvider;
 use crate::traits::{
     CompletionRequest, CompletionResponse, ModelInfo, Provider, StreamChunk, ToolCapable,
 };
-use crate::openai::OpenAIProvider;
 
 /// Default Ollama API URL.
 const OLLAMA_API_URL: &str = "http://localhost:11434/v1";
@@ -73,11 +73,7 @@ impl LocalProvider {
     /// List available models from Ollama.
     pub async fn list_models(&self) -> anyhow::Result<Vec<OllamaModel>> {
         let base = self.base_url.trim_end_matches("/v1");
-        let response = self
-            .client
-            .get(format!("{}/api/tags", base))
-            .send()
-            .await?;
+        let response = self.client.get(format!("{}/api/tags", base)).send().await?;
 
         if !response.status().is_success() {
             anyhow::bail!("Failed to list Ollama models");

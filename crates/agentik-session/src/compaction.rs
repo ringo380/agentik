@@ -280,8 +280,7 @@ impl Compactor {
             return None;
         }
 
-        let messages_to_compact =
-            &session.messages[session.compact_boundary..boundary.index];
+        let messages_to_compact = &session.messages[session.compact_boundary..boundary.index];
 
         let extraction = self.extract_information(messages_to_compact);
 
@@ -332,8 +331,7 @@ impl Compactor {
             return Ok(None);
         }
 
-        let messages_to_compact =
-            &session.messages[session.compact_boundary..boundary.index];
+        let messages_to_compact = &session.messages[session.compact_boundary..boundary.index];
 
         let extraction = self.extract_information(messages_to_compact);
 
@@ -358,10 +356,7 @@ impl Compactor {
         new: &CompactedSummary,
     ) -> CompactedSummary {
         // Combine texts
-        let combined_text = format!(
-            "{}\n\n---\n\n{}",
-            previous.text, new.text
-        );
+        let combined_text = format!("{}\n\n---\n\n{}", previous.text, new.text);
 
         // Merge file lists (deduplicate)
         let mut all_files: HashSet<PathBuf> = HashSet::new();
@@ -409,10 +404,7 @@ Keep the summary under 500 words. Be factual and specific."
         );
 
         if let Some(prev) = previous_summary {
-            prompt_parts.push(format!(
-                "\n## Previous Summary\n{}",
-                prev.text
-            ));
+            prompt_parts.push(format!("\n## Previous Summary\n{}", prev.text));
         }
 
         prompt_parts.push("\n## Conversation to Summarize".to_string());
@@ -507,7 +499,8 @@ impl Default for LlmSummaryConfig {
             system_prompt: "You are a precise summarizer. Create concise summaries that capture \
                             the essential information from conversations. Focus on: what was \
                             requested, what actions were taken, and the current state. Be factual \
-                            and specific. Keep summaries under 500 words.".to_string(),
+                            and specific. Keep summaries under 500 words."
+                .to_string(),
         }
     }
 }
@@ -558,10 +551,8 @@ impl<P> LlmSummaryGenerator<P> {
         extraction: &ExtractionResult,
         previous_summary: Option<&CompactedSummary>,
     ) -> String {
-        let compactor = Compactor::with_config(
-            self.compaction_config.clone(),
-            ContextManager::new(),
-        );
+        let compactor =
+            Compactor::with_config(self.compaction_config.clone(), ContextManager::new());
         compactor.build_summary_prompt(messages, extraction, previous_summary)
     }
 }
@@ -590,13 +581,16 @@ impl<P: CompletionProvider> SummaryGenerator for LlmSummaryGenerator<P> {
         let prompt = self.build_prompt(messages, extraction, previous_summary);
 
         // Call the provider to generate the summary
-        let response = self.provider.complete_for_summary(
-            &self.config.model,
-            &self.config.system_prompt,
-            &prompt,
-            self.config.max_tokens,
-            self.config.temperature,
-        ).await?;
+        let response = self
+            .provider
+            .complete_for_summary(
+                &self.config.model,
+                &self.config.system_prompt,
+                &prompt,
+                self.config.max_tokens,
+                self.config.temperature,
+            )
+            .await?;
 
         // Post-process: ensure the summary isn't too long
         let summary = if response.len() > 2000 {
@@ -654,7 +648,9 @@ mod tests {
         let extraction = compactor.extract_information(&messages);
 
         assert!(!extraction.modified_files.is_empty());
-        assert!(extraction.modified_files.contains(&PathBuf::from("/tmp/test.rs")));
+        assert!(extraction
+            .modified_files
+            .contains(&PathBuf::from("/tmp/test.rs")));
     }
 
     #[test]
@@ -695,8 +691,13 @@ mod tests {
 
         // Add enough messages to trigger compaction consideration
         for i in 0..25 {
-            session.messages.push(Message::user(format!("Message {} with some content", i)));
-            session.messages.push(Message::assistant(format!("Response {} with more content", i)));
+            session
+                .messages
+                .push(Message::user(format!("Message {} with some content", i)));
+            session.messages.push(Message::assistant(format!(
+                "Response {} with more content",
+                i
+            )));
         }
 
         // Simple compaction should work even without LLM

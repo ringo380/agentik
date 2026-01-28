@@ -82,7 +82,11 @@ impl ProviderRegistry {
                 .as_ref()
                 .and_then(|c| c.base_url.as_ref())
                 .map(|url| LocalProvider::with_url(url))
-                .or_else(|| std::env::var("OLLAMA_HOST").ok().map(LocalProvider::with_url))
+                .or_else(|| {
+                    std::env::var("OLLAMA_HOST")
+                        .ok()
+                        .map(LocalProvider::with_url)
+                })
                 .unwrap_or_else(LocalProvider::new);
             registry.register(Arc::new(provider));
         }
@@ -138,9 +142,7 @@ impl ProviderRegistry {
 
     /// Get the default provider.
     pub fn default_provider(&self) -> Option<Arc<dyn Provider>> {
-        self.default_provider
-            .as_ref()
-            .and_then(|id| self.get(id))
+        self.default_provider.as_ref().and_then(|id| self.get(id))
     }
 
     /// Set the default provider.

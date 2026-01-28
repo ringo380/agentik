@@ -39,24 +39,15 @@ pub async fn handle_command(
             print!("\x1B[2J\x1B[1;1H");
             CommandResult::Continue
         }
-        "/session" => {
-            handle_session_command(args, store, session_id).await
-        }
-        "/model" => {
-            handle_model_command(args, ctx)
-        }
-        "/provider" => {
-            handle_provider_command(args, ctx)
-        }
-        "/status" => {
-            print_status(ctx, store, session_id).await
-        }
-        "/history" => {
-            handle_history_command(args, store, session_id).await
-        }
-        _ => {
-            CommandResult::Error(format!("Unknown command: {}. Type /help for available commands.", command))
-        }
+        "/session" => handle_session_command(args, store, session_id).await,
+        "/model" => handle_model_command(args, ctx),
+        "/provider" => handle_provider_command(args, ctx),
+        "/status" => print_status(ctx, store, session_id).await,
+        "/history" => handle_history_command(args, store, session_id).await,
+        _ => CommandResult::Error(format!(
+            "Unknown command: {}. Type /help for available commands.",
+            command
+        )),
     }
 }
 
@@ -113,26 +104,34 @@ async fn handle_session_command(
                 Err(e) => CommandResult::Error(format!("Failed to list sessions: {}", e)),
             }
         }
-        None => {
-            match store.get_metadata(session_id).await {
-                Ok(meta) => {
-                    println!("Current session:");
-                    println!("  ID:         {}", meta.id);
-                    println!("  Title:      {}", meta.title.as_deref().unwrap_or("(untitled)"));
-                    println!("  Created:    {}", meta.created_at.format("%Y-%m-%d %H:%M:%S"));
-                    println!("  Last active: {}", meta.last_active_at.format("%Y-%m-%d %H:%M:%S"));
-                    println!("  Directory:  {}", meta.working_directory.display());
-                    if !meta.tags.is_empty() {
-                        println!("  Tags:       {}", meta.tags.join(", "));
-                    }
-                    CommandResult::Continue
+        None => match store.get_metadata(session_id).await {
+            Ok(meta) => {
+                println!("Current session:");
+                println!("  ID:         {}", meta.id);
+                println!(
+                    "  Title:      {}",
+                    meta.title.as_deref().unwrap_or("(untitled)")
+                );
+                println!(
+                    "  Created:    {}",
+                    meta.created_at.format("%Y-%m-%d %H:%M:%S")
+                );
+                println!(
+                    "  Last active: {}",
+                    meta.last_active_at.format("%Y-%m-%d %H:%M:%S")
+                );
+                println!("  Directory:  {}", meta.working_directory.display());
+                if !meta.tags.is_empty() {
+                    println!("  Tags:       {}", meta.tags.join(", "));
                 }
-                Err(e) => CommandResult::Error(format!("Failed to get session info: {}", e)),
+                CommandResult::Continue
             }
-        }
-        Some(subcmd) => {
-            CommandResult::Error(format!("Unknown session subcommand: {}. Try /session or /session list", subcmd))
-        }
+            Err(e) => CommandResult::Error(format!("Failed to get session info: {}", e)),
+        },
+        Some(subcmd) => CommandResult::Error(format!(
+            "Unknown session subcommand: {}. Try /session or /session list",
+            subcmd
+        )),
     }
 }
 
@@ -145,7 +144,11 @@ fn handle_model_command(args: &[&str], ctx: &AppContext) -> CommandResult {
         println!("Available models:");
         if let Some(provider) = ctx.registry.default_provider() {
             for model in provider.available_models() {
-                let marker = if model.id == ctx.config.general.model { " *" } else { "  " };
+                let marker = if model.id == ctx.config.general.model {
+                    " *"
+                } else {
+                    "  "
+                };
                 println!(
                     "{}  {} ({}) - {}k context",
                     marker,
@@ -159,8 +162,14 @@ fn handle_model_command(args: &[&str], ctx: &AppContext) -> CommandResult {
     } else {
         let model_name = args[0];
         // TODO: Actually switch the model (requires mutable config)
-        println!("Model switching not yet implemented. Current model: {}", ctx.config.general.model);
-        println!("To use a different model, restart with: agentik -m {}", model_name);
+        println!(
+            "Model switching not yet implemented. Current model: {}",
+            ctx.config.general.model
+        );
+        println!(
+            "To use a different model, restart with: agentik -m {}",
+            model_name
+        );
         CommandResult::Continue
     }
 }
@@ -171,18 +180,28 @@ fn handle_provider_command(args: &[&str], ctx: &AppContext) -> CommandResult {
         Some(&"list") | None => {
             println!("Available providers:");
             for provider in ctx.registry.providers() {
-                let status = if provider.is_configured() { "configured" } else { "not configured" };
-                let is_default = ctx.registry.default_provider()
+                let status = if provider.is_configured() {
+                    "configured"
+                } else {
+                    "not configured"
+                };
+                let is_default = ctx
+                    .registry
+                    .default_provider()
                     .map(|p| p.id() == provider.id())
                     .unwrap_or(false);
                 let marker = if is_default { " *" } else { "  " };
-                println!("{}  {} ({}) - {}", marker, provider.id(), provider.name(), status);
+                println!(
+                    "{}  {} ({}) - {}",
+                    marker,
+                    provider.id(),
+                    provider.name(),
+                    status
+                );
             }
             CommandResult::Continue
         }
-        Some(subcmd) => {
-            CommandResult::Error(format!("Unknown provider subcommand: {}", subcmd))
-        }
+        Some(subcmd) => CommandResult::Error(format!("Unknown provider subcommand: {}", subcmd)),
     }
 }
 
@@ -209,16 +228,23 @@ async fn print_status(
     println!("Session:  {}", session_id);
     if let Ok(meta) = store.get_metadata(session_id).await {
         println!("Turns:    {} in session", meta.metrics.turn_count);
-        println!("Tokens:   {} in / {} out",
-            meta.metrics.total_tokens_in,
-            meta.metrics.total_tokens_out
+        println!(
+            "Tokens:   {} in / {} out",
+            meta.metrics.total_tokens_in, meta.metrics.total_tokens_out
         );
     }
     println!();
 
     // Config info
     println!("Max tokens:     {}", ctx.config.limits.max_tokens);
-    println!("Sandbox:        {}", if ctx.config.general.sandbox { "enabled" } else { "disabled" });
+    println!(
+        "Sandbox:        {}",
+        if ctx.config.general.sandbox {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
 
     CommandResult::Continue
 }

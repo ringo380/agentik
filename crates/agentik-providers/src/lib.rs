@@ -21,4 +21,6 @@ pub use local::LocalProvider;
 pub use openai::OpenAIProvider;
 pub use registry::ProviderRegistry;
 pub use sse::{SseEvent, SseParser};
-pub use traits::{CompletionRequest, CompletionResponse, ModelInfo, Pricing, Provider, StreamChunk, ToolCapable};
+pub use traits::{
+    CompletionRequest, CompletionResponse, ModelInfo, Pricing, Provider, StreamChunk, ToolCapable,
+};

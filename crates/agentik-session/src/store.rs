@@ -296,7 +296,10 @@ impl SessionStore for SqliteSessionStore {
         let git_json = meta.git.as_ref().map(|g| serde_json::to_string(g).unwrap());
         let metrics_json = serde_json::to_string(&meta.metrics)?;
         let model_json = serde_json::to_string(&meta.model)?;
-        let summary_json = session.summary.as_ref().map(|s| serde_json::to_string(s).unwrap());
+        let summary_json = session
+            .summary
+            .as_ref()
+            .map(|s| serde_json::to_string(s).unwrap());
 
         conn.execute(
             r#"
@@ -386,9 +389,7 @@ impl SessionStore for SqliteSessionStore {
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
-        let summary = summary_json
-            .map(|s| serde_json::from_str(&s))
-            .transpose()?;
+        let summary = summary_json.map(|s| serde_json::from_str(&s)).transpose()?;
 
         Ok(Session {
             metadata,
@@ -472,7 +473,10 @@ impl SessionStore for SqliteSessionStore {
     async fn update_metadata(&self, metadata: &SessionMetadata) -> Result<()> {
         let conn = self.conn.lock().unwrap();
 
-        let git_json = metadata.git.as_ref().map(|g| serde_json::to_string(g).unwrap());
+        let git_json = metadata
+            .git
+            .as_ref()
+            .map(|g| serde_json::to_string(g).unwrap());
         let metrics_json = serde_json::to_string(&metadata.metrics)?;
         let model_json = serde_json::to_string(&metadata.model)?;
 
@@ -578,7 +582,8 @@ impl SessionStore for SqliteSessionStore {
         sql.push_str(" ORDER BY s.last_active_at DESC");
         sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, query.offset));
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params_refs.as_slice(), |row| {
@@ -747,7 +752,11 @@ impl SessionStore for SqliteSessionStore {
 
         let rows = conn.execute(
             "UPDATE sessions SET state = ?2, updated_at = ?3 WHERE id = ?1",
-            params![id, Self::state_to_str(state), Self::format_datetime(&Utc::now())],
+            params![
+                id,
+                Self::state_to_str(state),
+                Self::format_datetime(&Utc::now())
+            ],
         )?;
 
         if rows == 0 {
@@ -830,7 +839,10 @@ mod tests {
 
         let retrieved = store.get(session.id()).await.unwrap();
         assert_eq!(retrieved.id(), session.id());
-        assert_eq!(retrieved.metadata.working_directory, session.metadata.working_directory);
+        assert_eq!(
+            retrieved.metadata.working_directory,
+            session.metadata.working_directory
+        );
     }
 
     #[tokio::test]

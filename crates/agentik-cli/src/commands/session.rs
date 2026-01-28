@@ -129,9 +129,7 @@ async fn show_session<S: agentik_session::store::SessionStore>(
 ) -> anyhow::Result<()> {
     // Try to find session by prefix
     let session = match recovery.store().find_by_prefix(id).await {
-        Ok(matches) if matches.len() == 1 => {
-            recovery.store().get(&matches[0].id).await?
-        }
+        Ok(matches) if matches.len() == 1 => recovery.store().get(&matches[0].id).await?,
         Ok(matches) if matches.is_empty() => {
             println!("Session not found: {}", id);
             return Ok(());
@@ -154,7 +152,10 @@ async fn show_session<S: agentik_session::store::SessionStore>(
     println!("Session: {}", meta.id);
     println!("================================================================================");
     println!();
-    println!("Title:       {}", meta.title.as_deref().unwrap_or("(untitled)"));
+    println!(
+        "Title:       {}",
+        meta.title.as_deref().unwrap_or("(untitled)")
+    );
     println!("State:       {}", format_state(meta.state));
     println!("Directory:   {}", meta.working_directory.display());
     println!();
@@ -239,9 +240,7 @@ async fn export_session<S: agentik_session::store::SessionStore>(
 ) -> anyhow::Result<()> {
     // Try to find session by prefix
     let session = match recovery.store().find_by_prefix(id).await {
-        Ok(matches) if matches.len() == 1 => {
-            recovery.store().get(&matches[0].id).await?
-        }
+        Ok(matches) if matches.len() == 1 => recovery.store().get(&matches[0].id).await?,
         Ok(matches) if matches.is_empty() => {
             println!("Session not found: {}", id);
             return Ok(());
@@ -351,9 +350,7 @@ async fn delete_session<S: agentik_session::store::SessionStore>(
 /// Resume a session for the interactive mode.
 ///
 /// This function is called from main.rs when -c or -r flags are used.
-pub async fn resume_session(
-    id_or_prefix: Option<&str>,
-) -> anyhow::Result<agentik_core::Session> {
+pub async fn resume_session(id_or_prefix: Option<&str>) -> anyhow::Result<agentik_core::Session> {
     let store = SqliteSessionStore::open_default()?;
     let recovery = SessionRecovery::new(store);
 

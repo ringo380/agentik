@@ -168,10 +168,7 @@ impl<S: SessionStore> SessionRecovery<S> {
     }
 
     /// Get the most recent session for a directory.
-    pub async fn get_most_recent_for_directory(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Result<Session> {
+    pub async fn get_most_recent_for_directory(&self, path: impl AsRef<Path>) -> Result<Session> {
         let sessions = self.find_for_directory(path).await?;
         let summary = sessions.first().ok_or(RecoveryError::NoSessionsFound)?;
 
@@ -184,11 +181,7 @@ impl<S: SessionStore> SessionRecovery<S> {
     }
 
     /// Validate a session's integrity.
-    pub async fn validate(
-        &self,
-        id: &str,
-        options: &RecoveryOptions,
-    ) -> Result<ValidationResult> {
+    pub async fn validate(&self, id: &str, options: &RecoveryOptions) -> Result<ValidationResult> {
         let session = self
             .store
             .get(id)
@@ -273,9 +266,7 @@ impl<S: SessionStore> SessionRecovery<S> {
         let mut archived = Vec::new();
 
         for session in sessions {
-            if session.last_active_at < cutoff
-                && session.state != SessionState::Archived
-            {
+            if session.last_active_at < cutoff && session.state != SessionState::Archived {
                 self.store
                     .set_state(&session.id, SessionState::Archived)
                     .await?;

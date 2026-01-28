@@ -14,11 +14,16 @@ pub async fn run(prompt: &str, cli: &Cli, ctx: &Arc<AppContext>) -> anyhow::Resu
     // Get the provider (from CLI arg or default)
     let provider = if let Some(ref provider_name) = cli.provider {
         ctx.registry.get(provider_name).ok_or_else(|| {
-            anyhow::anyhow!("Provider '{}' not found. Run 'agentik provider list' to see available providers.", provider_name)
+            anyhow::anyhow!(
+                "Provider '{}' not found. Run 'agentik provider list' to see available providers.",
+                provider_name
+            )
         })?
     } else {
         ctx.registry.default_provider().ok_or_else(|| {
-            anyhow::anyhow!("No default provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
+            anyhow::anyhow!(
+                "No default provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY."
+            )
         })?
     };
 

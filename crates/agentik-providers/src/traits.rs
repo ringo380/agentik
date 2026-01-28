@@ -2,9 +2,9 @@
 
 use agentik_core::{Message, ToolCall, ToolDefinition};
 use async_trait::async_trait;
+use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
-use futures::Stream;
 
 /// Model information with capabilities and pricing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
