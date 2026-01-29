@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 agentik-core = { workspace = true }
+agentik-repomap = { path = "../agentik-repomap" }
 
 # Async
 tokio = { workspace = true, features = ["process", "fs"] }

@@ -17,9 +17,10 @@
 //! ```
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use agentik_core::{Message, Session, ToolCall, ToolDefinition, ToolResult};
+use agentik_repomap::{RepoMap, RepoMapSerializer, SerializeConfig};
 use agentik_providers::traits::{ToolCallDelta, Usage};
 use agentik_providers::{CompletionRequest, CompletionResponse, Provider, StreamChunk};
 use agentik_session::{ContextManager, SessionStore};
@@ -303,6 +304,8 @@ pub struct Agent {
     mode: AgentMode,
     /// Cancellation token for stopping operations.
     cancel_token: CancellationToken,
+    /// Repository map for codebase context (shared with GetRepoMapTool).
+    repo_map: Arc<RwLock<Option<RepoMap>>>,
 }
 
 impl Agent {
@@ -325,6 +328,7 @@ impl Agent {
             event_handler,
             mode: AgentMode::default(),
             cancel_token: CancellationToken::new(),
+            repo_map: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -361,6 +365,45 @@ impl Agent {
     /// Get a reference to the context manager.
     pub fn context_manager(&self) -> &ContextManager {
         &self.context_manager
+    }
+
+    /// Get the shared repo map reference.
+    ///
+    /// This can be passed to GetRepoMapTool so it shares the same repo map.
+    pub fn repo_map_ref(&self) -> Arc<RwLock<Option<RepoMap>>> {
+        Arc::clone(&self.repo_map)
+    }
+
+    /// Set the repository map.
+    pub fn set_repo_map(&self, map: RepoMap) {
+        let mut guard = self.repo_map.write().unwrap();
+        *guard = Some(map);
+    }
+
+    /// Check if a repo map is loaded.
+    pub fn has_repo_map(&self) -> bool {
+        self.repo_map.read().unwrap().is_some()
+    }
+
+    /// Get the serialized repo map for prompt injection.
+    ///
+    /// Returns a compact text representation of the most important files,
+    /// limited by the specified token budget.
+    fn get_repo_map_for_prompt(&self, token_budget: usize) -> Option<String> {
+        let guard = self.repo_map.read().unwrap();
+        let map = guard.as_ref()?;
+
+        let config = SerializeConfig::with_budget(token_budget);
+        let serialized = RepoMapSerializer::serialize_for_prompt(map, &config);
+
+        if serialized.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "<repository_map>\n{}</repository_map>",
+                serialized
+            ))
+        }
     }
 
     // ========================================================================
@@ -702,7 +745,7 @@ impl Agent {
         Ok((response.content, response.tool_calls, usage))
     }
 
-    /// Build the system prompt including mode additions.
+    /// Build the system prompt including mode additions and repo map.
     fn build_system_prompt(&self) -> Option<String> {
         let mut parts = Vec::new();
 
@@ -712,6 +755,11 @@ impl Agent {
 
         if let Some(mode_prompt) = self.mode_system_prompt() {
             parts.push(mode_prompt);
+        }
+
+        // Inject repo map with ~2000 token budget
+        if let Some(repo_map) = self.get_repo_map_for_prompt(2000) {
+            parts.push(repo_map);
         }
 
         if parts.is_empty() {
@@ -761,6 +809,7 @@ pub struct AgentBuilder {
     config: AgentConfig,
     event_handler: Option<Arc<dyn AgentEventHandler>>,
     mode: AgentMode,
+    repo_map: Option<RepoMap>,
 }
 
 impl Default for AgentBuilder {
@@ -780,6 +829,7 @@ impl AgentBuilder {
             config: AgentConfig::default(),
             event_handler: None,
             mode: AgentMode::default(),
+            repo_map: None,
         }
     }
 
@@ -861,6 +911,12 @@ impl AgentBuilder {
         self
     }
 
+    /// Set the repository map for codebase context.
+    pub fn repo_map(mut self, map: RepoMap) -> Self {
+        self.repo_map = Some(map);
+        self
+    }
+
     /// Build the agent.
     ///
     /// Returns an error if required components are missing.
@@ -883,6 +939,11 @@ impl AgentBuilder {
 
         let mut agent = Agent::new(provider, executor, store, session, self.config, event_handler);
         agent.set_mode(self.mode);
+
+        // Set repo map if provided
+        if let Some(map) = self.repo_map {
+            agent.set_repo_map(map);
+        }
 
         Ok(agent)
     }

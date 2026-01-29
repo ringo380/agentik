@@ -35,6 +35,7 @@ pub mod external;
 pub mod file_ops;
 pub mod git;
 pub mod registry;
+pub mod repo_map;
 pub mod shell;
 pub mod web;
 
@@ -43,6 +44,7 @@ pub use registry::{SandboxConfig, Tool, ToolContext, ToolRegistry};
 // Re-export tools for convenience
 pub use file_ops::{EditTool, GlobTool, GrepTool, ReadTool, WriteTool};
 pub use git::{GitAddTool, GitCommitTool, GitDiffTool, GitLogTool, GitStatusTool};
+pub use repo_map::GetRepoMapTool;
 pub use shell::BashTool;
 
 use std::sync::Arc;

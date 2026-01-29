@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 agentik-core = { workspace = true }
 agentik-providers = { workspace = true }
+agentik-repomap = { path = "../agentik-repomap" }
 agentik-session = { workspace = true }
 agentik-tools = { workspace = true }
 
