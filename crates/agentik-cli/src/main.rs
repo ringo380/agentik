@@ -126,6 +126,36 @@ enum SessionAction {
         /// Session ID
         id: String,
     },
+    /// Set or show session title
+    Title {
+        /// Session ID
+        id: String,
+        /// Title to set (omit to show current title)
+        title: Option<String>,
+    },
+    /// Manage session tags
+    Tag {
+        /// Session ID
+        id: String,
+        #[command(subcommand)]
+        action: TagAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TagAction {
+    /// Add a tag to the session
+    Add {
+        /// Tag to add
+        tag: String,
+    },
+    /// Remove a tag from the session
+    Remove {
+        /// Tag to remove
+        tag: String,
+    },
+    /// List all tags
+    List,
 }
 
 #[derive(Subcommand)]

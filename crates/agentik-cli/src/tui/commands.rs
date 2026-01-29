@@ -66,6 +66,10 @@ fn print_help() {
     println!("  /clear           Clear the screen");
     println!("  /session         Show current session info");
     println!("  /session list    List recent sessions");
+    println!("  /session title [text]      Show or set session title");
+    println!("  /session tag               List session tags");
+    println!("  /session tag add <tag>     Add a tag");
+    println!("  /session tag remove <tag>  Remove a tag");
     println!("  /model           Show current model");
     println!("  /model <name>    Switch to a different model");
     println!("  /provider        Show current provider");
@@ -124,6 +128,8 @@ async fn handle_session_command(
                 Err(e) => CommandResult::Error(format!("Failed to list sessions: {}", e)),
             }
         }
+        Some(&"title") => handle_session_title(&args[1..], store, session_id).await,
+        Some(&"tag") => handle_session_tag(&args[1..], store, session_id).await,
         None => match store.get_metadata(session_id).await {
             Ok(meta) => {
                 println!("Current session:");
@@ -149,9 +155,120 @@ async fn handle_session_command(
             Err(e) => CommandResult::Error(format!("Failed to get session info: {}", e)),
         },
         Some(subcmd) => CommandResult::Error(format!(
-            "Unknown session subcommand: {}. Try /session or /session list",
+            "Unknown session subcommand: {}. Try /session, /session list, /session title, or /session tag",
             subcmd
         )),
+    }
+}
+
+/// Handle /session title command.
+async fn handle_session_title(
+    args: &[&str],
+    store: &Arc<dyn SessionStore>,
+    session_id: &str,
+) -> CommandResult {
+    match store.get_metadata(session_id).await {
+        Ok(mut meta) => {
+            if args.is_empty() {
+                // Show current title
+                println!(
+                    "Current title: {}",
+                    meta.title.as_deref().unwrap_or("(untitled)")
+                );
+            } else {
+                // Set new title
+                let new_title = args.join(" ");
+                if new_title.len() > 100 {
+                    return CommandResult::Error(
+                        "Title too long (max 100 characters)".to_string(),
+                    );
+                }
+                meta.title = Some(new_title.clone());
+                match store.update_metadata(&meta).await {
+                    Ok(()) => println!("Title set to: {}", new_title),
+                    Err(e) => return CommandResult::Error(format!("Failed to update title: {}", e)),
+                }
+            }
+            CommandResult::Continue
+        }
+        Err(e) => CommandResult::Error(format!("Failed to get session info: {}", e)),
+    }
+}
+
+/// Handle /session tag command.
+async fn handle_session_tag(
+    args: &[&str],
+    store: &Arc<dyn SessionStore>,
+    session_id: &str,
+) -> CommandResult {
+    match store.get_metadata(session_id).await {
+        Ok(mut meta) => {
+            match args.first() {
+                Some(&"add") => {
+                    if args.len() < 2 {
+                        return CommandResult::Error(
+                            "Usage: /session tag add <tag>".to_string(),
+                        );
+                    }
+                    let tag = args[1..].join(" ");
+                    if tag.len() > 50 {
+                        return CommandResult::Error(
+                            "Tag too long (max 50 characters)".to_string(),
+                        );
+                    }
+                    if tag.contains(',') {
+                        return CommandResult::Error(
+                            "Tags cannot contain commas".to_string(),
+                        );
+                    }
+                    if meta.tags.contains(&tag) {
+                        println!("Tag already exists: {}", tag);
+                    } else {
+                        meta.tags.push(tag.clone());
+                        match store.update_metadata(&meta).await {
+                            Ok(()) => println!("Tag added: {}", tag),
+                            Err(e) => {
+                                return CommandResult::Error(format!("Failed to add tag: {}", e))
+                            }
+                        }
+                    }
+                }
+                Some(&"remove") => {
+                    if args.len() < 2 {
+                        return CommandResult::Error(
+                            "Usage: /session tag remove <tag>".to_string(),
+                        );
+                    }
+                    let tag = args[1..].join(" ");
+                    if let Some(pos) = meta.tags.iter().position(|t| t == &tag) {
+                        meta.tags.remove(pos);
+                        match store.update_metadata(&meta).await {
+                            Ok(()) => println!("Tag removed: {}", tag),
+                            Err(e) => {
+                                return CommandResult::Error(format!("Failed to remove tag: {}", e))
+                            }
+                        }
+                    } else {
+                        println!("Tag not found: {}", tag);
+                    }
+                }
+                Some(&"list") | None => {
+                    if meta.tags.is_empty() {
+                        println!("No tags set");
+                    } else {
+                        println!("Tags: {}", meta.tags.join(", "));
+                    }
+                }
+                Some(subcmd) => {
+                    return CommandResult::Error(format!(
+                        "Unknown tag subcommand: {}. Try add, remove, or list",
+                        subcmd
+                    ));
+                }
+            }
+            CommandResult::Continue
+        }
+        Err(e) => CommandResult::Error(format!("Failed to get session info: {}", e)),
     }
 }
 

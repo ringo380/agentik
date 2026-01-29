@@ -8,7 +8,7 @@ use agentik_session::{
     store::{SessionSummary, SqliteSessionStore},
 };
 
-use crate::SessionAction;
+use crate::{SessionAction, TagAction};
 
 /// Format a datetime for display.
 fn format_time(dt: &DateTime<Utc>) -> String {
@@ -75,6 +75,12 @@ pub async fn handle(action: SessionAction) -> anyhow::Result<()> {
         }
         SessionAction::Delete { id } => {
             delete_session(&recovery, &id).await?;
+        }
+        SessionAction::Title { id, title } => {
+            handle_title(&recovery, &id, title.as_deref()).await?;
+        }
+        SessionAction::Tag { id, action } => {
+            handle_tag(&recovery, &id, action).await?;
         }
     }
 
@@ -383,4 +389,118 @@ pub async fn resume_session(id_or_prefix: Option<&str>) -> anyhow::Result<agenti
         }
         Err(e) => anyhow::bail!("Failed to resume session: {}", e),
     }
+}
+
+/// Handle session title command.
+async fn handle_title<S: agentik_session::store::SessionStore>(
+    recovery: &SessionRecovery<S>,
+    id: &str,
+    title: Option<&str>,
+) -> anyhow::Result<()> {
+    // Try to find session by prefix
+    let matches = recovery.store().find_by_prefix(id).await?;
+
+    match matches.len() {
+        0 => {
+            println!("Session not found: {}", id);
+        }
+        1 => {
+            let session_id = &matches[0].id;
+            let mut meta = recovery.store().get_metadata(session_id).await?;
+
+            match title {
+                Some(new_title) => {
+                    if new_title.len() > 100 {
+                        println!("Title too long (max 100 characters)");
+                        return Ok(());
+                    }
+                    meta.title = Some(new_title.to_string());
+                    recovery.store().update_metadata(&meta).await?;
+                    println!("Title set to: {}", new_title);
+                }
+                None => {
+                    println!(
+                        "Title: {}",
+                        meta.title.as_deref().unwrap_or("(untitled)")
+                    );
+                }
+            }
+        }
+        n => {
+            println!("Ambiguous ID '{}' matches {} sessions:", id, n);
+            for m in &matches {
+                println!("  {}", format_session_summary(m, false));
+            }
+            println!();
+            println!("Please provide a more specific ID.");
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle session tag command.
+async fn handle_tag<S: agentik_session::store::SessionStore>(
+    recovery: &SessionRecovery<S>,
+    id: &str,
+    action: TagAction,
+) -> anyhow::Result<()> {
+    // Try to find session by prefix
+    let matches = recovery.store().find_by_prefix(id).await?;
+
+    match matches.len() {
+        0 => {
+            println!("Session not found: {}", id);
+        }
+        1 => {
+            let session_id = &matches[0].id;
+            let mut meta = recovery.store().get_metadata(session_id).await?;
+
+            match action {
+                TagAction::Add { tag } => {
+                    if tag.len() > 50 {
+                        println!("Tag too long (max 50 characters)");
+                        return Ok(());
+                    }
+                    if tag.contains(',') {
+                        println!("Tags cannot contain commas");
+                        return Ok(());
+                    }
+                    if meta.tags.contains(&tag) {
+                        println!("Tag already exists: {}", tag);
+                    } else {
+                        meta.tags.push(tag.clone());
+                        recovery.store().update_metadata(&meta).await?;
+                        println!("Tag added: {}", tag);
+                    }
+                }
+                TagAction::Remove { tag } => {
+                    if let Some(pos) = meta.tags.iter().position(|t| t == &tag) {
+                        meta.tags.remove(pos);
+                        recovery.store().update_metadata(&meta).await?;
+                        println!("Tag removed: {}", tag);
+                    } else {
+                        println!("Tag not found: {}", tag);
+                    }
+                }
+                TagAction::List => {
+                    if meta.tags.is_empty() {
+                        println!("No tags set");
+                    } else {
+                        println!("Tags: {}", meta.tags.join(", "));
+                    }
+                }
+            }
+        }
+        n => {
+            println!("Ambiguous ID '{}' matches {} sessions:", id, n);
+            for m in &matches {
+                println!("  {}", format_session_summary(m, false));
+            }
+            println!();
+            println!("Please provide a more specific ID.");
+        }
+    }
+
+    Ok(())
 }
