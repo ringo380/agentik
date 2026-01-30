@@ -467,6 +467,7 @@ impl SessionStore for SqliteSessionStore {
             metrics: serde_json::from_str(&metrics_json).unwrap_or_default(),
             model: serde_json::from_str(&model_json).unwrap_or_default(),
             tags,
+            added_files: vec![], // TODO: Load from database when persistence is added
         })
     }
 

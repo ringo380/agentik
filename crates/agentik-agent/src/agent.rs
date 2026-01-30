@@ -388,13 +388,17 @@ impl Agent {
     /// Get the serialized repo map for prompt injection.
     ///
     /// Returns a compact text representation of the most important files,
-    /// limited by the specified token budget.
-    fn get_repo_map_for_prompt(&self, token_budget: usize) -> Option<String> {
+    /// limited by the specified token budget. Focus files are given priority.
+    fn get_repo_map_for_prompt(&self, token_budget: usize, focus_files: &[PathBuf]) -> Option<String> {
         let guard = self.repo_map.read().unwrap();
         let map = guard.as_ref()?;
 
         let config = SerializeConfig::with_budget(token_budget);
-        let serialized = RepoMapSerializer::serialize_for_prompt(map, &config);
+        let serialized = if focus_files.is_empty() {
+            RepoMapSerializer::serialize_for_prompt(map, &config)
+        } else {
+            RepoMapSerializer::serialize_for_tool(map, Some(focus_files), None, &config)
+        };
 
         if serialized.is_empty() {
             None
@@ -404,6 +408,48 @@ impl Agent {
                 serialized
             ))
         }
+    }
+
+    /// Get the content of explicitly added files for prompt injection.
+    ///
+    /// Returns the full content of files that were added via `/add` command,
+    /// formatted for inclusion in the system prompt.
+    fn get_added_files_content(&self) -> Option<String> {
+        let files = &self.session.metadata.added_files;
+        if files.is_empty() {
+            return None;
+        }
+
+        let mut content = String::from("<added_files>\n");
+        let mut total_size = 0;
+        const MAX_TOTAL_SIZE: usize = 200_000; // ~50k tokens
+
+        for path in files {
+            let full_path = self.session.metadata.working_directory.join(path);
+            if let Ok(file_content) = std::fs::read_to_string(&full_path) {
+                // Check size limit
+                if total_size + file_content.len() > MAX_TOTAL_SIZE {
+                    content.push_str(&format!(
+                        "<file path=\"{}\" truncated=\"true\">Content truncated due to size limits</file>\n",
+                        path.display()
+                    ));
+                    break;
+                }
+                total_size += file_content.len();
+                content.push_str(&format!(
+                    "<file path=\"{}\">\n{}\n</file>\n",
+                    path.display(),
+                    file_content
+                ));
+            } else {
+                content.push_str(&format!(
+                    "<file path=\"{}\" error=\"true\">File not found or not readable</file>\n",
+                    path.display()
+                ));
+            }
+        }
+        content.push_str("</added_files>");
+        Some(content)
     }
 
     // ========================================================================
@@ -745,7 +791,7 @@ impl Agent {
         Ok((response.content, response.tool_calls, usage))
     }
 
-    /// Build the system prompt including mode additions and repo map.
+    /// Build the system prompt including mode additions, repo map, and added files.
     fn build_system_prompt(&self) -> Option<String> {
         let mut parts = Vec::new();
 
@@ -757,9 +803,15 @@ impl Agent {
             parts.push(mode_prompt);
         }
 
-        // Inject repo map with ~2000 token budget
-        if let Some(repo_map) = self.get_repo_map_for_prompt(2000) {
+        // Inject repo map with ~2000 token budget, prioritizing focus files
+        let focus_files = &self.session.metadata.added_files;
+        if let Some(repo_map) = self.get_repo_map_for_prompt(2000, focus_files) {
             parts.push(repo_map);
+        }
+
+        // Inject full content of added files
+        if let Some(files_content) = self.get_added_files_content() {
+            parts.push(files_content);
         }
 
         if parts.is_empty() {

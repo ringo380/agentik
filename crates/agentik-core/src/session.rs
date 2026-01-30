@@ -43,6 +43,9 @@ pub struct SessionMetadata {
     /// Tags for organization
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Files explicitly added to context
+    #[serde(default)]
+    pub added_files: Vec<PathBuf>,
     /// Parent session ID (for forked sessions)
     pub parent_session_id: Option<String>,
     /// Git context
@@ -67,6 +70,7 @@ impl SessionMetadata {
             working_directory,
             title: None,
             tags: vec![],
+            added_files: vec![],
             parent_session_id: None,
             git: None,
             metrics: SessionMetrics::default(),
