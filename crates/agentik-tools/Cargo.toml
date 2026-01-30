@@ -29,8 +29,8 @@ walkdir = "2"
 ignore = "0.4"
 globset = "0.4"
 
-# Git (vendored-openssl for cross-platform compatibility)
-git2 = { version = "0.19", features = ["vendored-openssl"] }
+# Git
+git2 = { workspace = true }
 
 # Logging
 tracing = { workspace = true }

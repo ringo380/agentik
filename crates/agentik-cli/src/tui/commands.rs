@@ -1,9 +1,11 @@
 //! Slash command handling for the REPL.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use agentik_agent::{Agent, AgentMode};
 use agentik_session::{SessionQuery, SessionStore};
+use git2::{Repository, StatusOptions};
 
 use crate::AppContext;
 
@@ -50,6 +52,10 @@ pub async fn handle_command(
         "/mode" => handle_mode_command(args, agent),
         "/tools" => handle_tools_command(args, agent),
         "/compact" => handle_compact_command(agent).await,
+        "/add" => handle_add_command(args, store, agent).await,
+        "/drop" => handle_drop_command(args, store, agent).await,
+        "/files" => handle_files_command(agent),
+        "/undo" => handle_undo_command(agent),
         _ => CommandResult::Error(format!(
             "Unknown command: {}. Type /help for available commands.",
             command
@@ -82,6 +88,14 @@ fn print_help() {
     println!("  /mode <mode>     Switch mode (supervised, autonomous, planning, ask)");
     println!("  /tools           List available tools");
     println!("  /compact         Trigger context compaction");
+    println!();
+    println!("Context commands:");
+    println!("  /add <path>      Add file or directory to context");
+    println!("  /drop <path>     Remove file from context");
+    println!("  /files           List files in context");
+    println!();
+    println!("Git commands:");
+    println!("  /undo            Undo the last git commit");
     println!();
     println!("Tool Approval (when prompted):");
     println!("  y, yes           Approve this tool call");
@@ -505,5 +519,311 @@ async fn handle_compact_command(agent: &mut Agent) -> CommandResult {
             CommandResult::Continue
         }
         Err(e) => CommandResult::Error(format!("Compaction failed: {}", e)),
+    }
+}
+
+/// Handle /add command to add files to context.
+async fn handle_add_command(
+    args: &[&str],
+    store: &Arc<dyn SessionStore>,
+    agent: &mut Agent,
+) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Error("Usage: /add <path> [path...]".to_string());
+    }
+
+    let working_dir = agent.session().metadata.working_directory.clone();
+    let mut added = Vec::new();
+    let mut errors = Vec::new();
+
+    for arg in args {
+        let pattern = working_dir.join(arg);
+        let pattern_str = pattern.to_string_lossy();
+
+        // Try glob expansion
+        match glob::glob(&pattern_str) {
+            Ok(paths) => {
+                let mut matched_any = false;
+                for entry in paths.flatten() {
+                    matched_any = true;
+                    // Make path relative to working directory
+                    let relative_path = entry
+                        .strip_prefix(&working_dir)
+                        .unwrap_or(&entry)
+                        .to_path_buf();
+
+                    if entry.is_file() {
+                        add_file_to_context(agent, relative_path.clone(), &mut added);
+                    } else if entry.is_dir() {
+                        add_directory_to_context(agent, &entry, &working_dir, &mut added);
+                    }
+                }
+
+                // If glob didn't match, try as literal path
+                if !matched_any {
+                    let path = PathBuf::from(arg);
+                    let full_path = working_dir.join(&path);
+
+                    if full_path.is_file() {
+                        add_file_to_context(agent, path, &mut added);
+                    } else if full_path.is_dir() {
+                        add_directory_to_context(agent, &full_path, &working_dir, &mut added);
+                    } else {
+                        errors.push(format!("Not found: {}", arg));
+                    }
+                }
+            }
+            Err(e) => {
+                errors.push(format!("Invalid pattern '{}': {}", arg, e));
+            }
+        }
+    }
+
+    // Update metadata and persist
+    if !added.is_empty() {
+        if let Err(e) = store.update_metadata(&agent.session().metadata).await {
+            return CommandResult::Error(format!("Failed to persist: {}", e));
+        }
+    }
+
+    // Print results
+    for path in &added {
+        println!("Added: {}", path.display());
+    }
+    for err in &errors {
+        println!("{}", err);
+    }
+
+    if added.is_empty() && errors.is_empty() {
+        println!("No files added.");
+    }
+
+    CommandResult::Continue
+}
+
+/// Add a single file to context.
+fn add_file_to_context(agent: &mut Agent, path: PathBuf, added: &mut Vec<PathBuf>) {
+    let files = &mut agent.session_mut().metadata.added_files;
+    if !files.contains(&path) {
+        files.push(path.clone());
+        added.push(path);
+    }
+}
+
+/// Recursively add directory contents to context.
+fn add_directory_to_context(
+    agent: &mut Agent,
+    dir: &std::path::Path,
+    working_dir: &std::path::Path,
+    added: &mut Vec<PathBuf>,
+) {
+    const MAX_DIR_FILES: usize = 50;
+    let mut count = 0;
+
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if count >= MAX_DIR_FILES {
+                println!("  (limited to {} files)", MAX_DIR_FILES);
+                break;
+            }
+
+            let path = entry.path();
+            if path.is_file() {
+                let relative = path
+                    .strip_prefix(working_dir)
+                    .unwrap_or(&path)
+                    .to_path_buf();
+                add_file_to_context(agent, relative, added);
+                count += 1;
+            }
+        }
+    }
+}
+
+/// Handle /drop command to remove files from context.
+async fn handle_drop_command(
+    args: &[&str],
+    store: &Arc<dyn SessionStore>,
+    agent: &mut Agent,
+) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Error("Usage: /drop <path> [path...]".to_string());
+    }
+
+    let working_dir = agent.session().metadata.working_directory.clone();
+    let mut removed = Vec::new();
+
+    for arg in args {
+        let pattern = working_dir.join(arg);
+        let pattern_str = pattern.to_string_lossy();
+
+        // Get current files to match against
+        let current_files: Vec<PathBuf> = agent
+            .session()
+            .metadata
+            .added_files
+            .clone();
+
+        // Try glob pattern matching
+        let matched: Vec<PathBuf> = current_files
+            .iter()
+            .filter(|f| {
+                let full_path = working_dir.join(f);
+                let full_str = full_path.to_string_lossy();
+                glob::Pattern::new(&pattern_str)
+                    .map(|p| p.matches(&full_str))
+                    .unwrap_or(false)
+                    || f.to_string_lossy() == *arg
+                    || f.starts_with(arg)
+            })
+            .cloned()
+            .collect();
+
+        if matched.is_empty() {
+            // Try exact match
+            let path = PathBuf::from(arg);
+            let files = &mut agent.session_mut().metadata.added_files;
+            if let Some(pos) = files.iter().position(|f| f == &path) {
+                let removed_path = files.remove(pos);
+                removed.push(removed_path);
+            }
+        } else {
+            for path in matched {
+                let files = &mut agent.session_mut().metadata.added_files;
+                if let Some(pos) = files.iter().position(|f| f == &path) {
+                    files.remove(pos);
+                    removed.push(path);
+                }
+            }
+        }
+    }
+
+    // Update metadata and persist
+    if !removed.is_empty() {
+        if let Err(e) = store.update_metadata(&agent.session().metadata).await {
+            return CommandResult::Error(format!("Failed to persist: {}", e));
+        }
+    }
+
+    // Print results
+    if removed.is_empty() {
+        println!("No matching files found in context.");
+    } else {
+        for path in &removed {
+            println!("Removed: {}", path.display());
+        }
+    }
+
+    CommandResult::Continue
+}
+
+/// Handle /files command to list files in context.
+fn handle_files_command(agent: &Agent) -> CommandResult {
+    let files = &agent.session().metadata.added_files;
+
+    if files.is_empty() {
+        println!("No files in context.");
+        println!();
+        println!("Use /add <path> to add files.");
+        return CommandResult::Continue;
+    }
+
+    println!("Files in context:");
+    println!();
+
+    let working_dir = &agent.session().metadata.working_directory;
+    let mut total_size = 0usize;
+
+    for path in files {
+        let full_path = working_dir.join(path);
+        let size_info = if let Ok(metadata) = std::fs::metadata(&full_path) {
+            let size = metadata.len() as usize;
+            total_size += size;
+            format_size(size)
+        } else {
+            "(not found)".to_string()
+        };
+        println!("  {} ({})", path.display(), size_info);
+    }
+
+    println!();
+    println!(
+        "Total: {} files, {} (~{} tokens)",
+        files.len(),
+        format_size(total_size),
+        total_size / 4 // rough token estimate
+    );
+
+    CommandResult::Continue
+}
+
+/// Format a size in human-readable form.
+fn format_size(bytes: usize) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+/// Handle /undo command to revert the last git commit.
+fn handle_undo_command(agent: &Agent) -> CommandResult {
+    let working_dir = &agent.session().metadata.working_directory;
+
+    // Open the repository
+    let repo = match Repository::discover(working_dir) {
+        Ok(r) => r,
+        Err(_) => return CommandResult::Error("Not in a git repository".to_string()),
+    };
+
+    // Check for uncommitted changes
+    if has_uncommitted_changes(&repo) {
+        return CommandResult::Error(
+            "Cannot undo: you have uncommitted changes. Commit or stash them first.".to_string(),
+        );
+    }
+
+    // Get the HEAD commit
+    let head = match repo.head() {
+        Ok(h) => h,
+        Err(e) => return CommandResult::Error(format!("Failed to get HEAD: {}", e)),
+    };
+
+    let head_commit = match head.peel_to_commit() {
+        Ok(c) => c,
+        Err(e) => return CommandResult::Error(format!("Failed to get HEAD commit: {}", e)),
+    };
+
+    // Get commit info for display
+    let message = head_commit.summary().unwrap_or("(no message)");
+    let short_sha = &head_commit.id().to_string()[..7];
+
+    // Find the parent commit
+    let parent = match head_commit.parent(0) {
+        Ok(p) => p,
+        Err(_) => {
+            return CommandResult::Error("Cannot undo: this is the initial commit.".to_string())
+        }
+    };
+
+    // Perform hard reset to the parent
+    if let Err(e) = repo.reset(parent.as_object(), git2::ResetType::Hard, None) {
+        return CommandResult::Error(format!("Failed to undo: {}", e));
+    }
+
+    println!("Undid commit {} ({})", short_sha, message);
+    CommandResult::Continue
+}
+
+/// Check if the repository has uncommitted changes.
+fn has_uncommitted_changes(repo: &Repository) -> bool {
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(false);
+
+    match repo.statuses(Some(&mut opts)) {
+        Ok(statuses) => !statuses.is_empty(),
+        Err(_) => true, // Assume dirty on error
     }
 }

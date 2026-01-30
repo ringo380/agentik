@@ -68,6 +68,10 @@ chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
 once_cell = "1"
 parking_lot = "0.12"
+glob = "0.3"
+
+# Git (vendored-openssl for cross-platform compatibility)
+git2 = { version = "0.19", features = ["vendored-openssl"] }
 
 # Internal crates
 agentik-core = { path = "crates/agentik-core" }
