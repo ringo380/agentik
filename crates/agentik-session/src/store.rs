@@ -106,6 +106,17 @@ pub struct AppendResult {
     pub message_index: i64,
 }
 
+/// Aggregated statistics across multiple sessions.
+#[derive(Debug, Clone, Default)]
+pub struct AggregatedStats {
+    pub session_count: u32,
+    pub total_tokens_in: u64,
+    pub total_tokens_out: u64,
+    pub total_cost: f64,
+    pub total_turns: u32,
+    pub total_tool_calls: u32,
+}
+
 /// Session storage trait for abstraction over storage backends.
 #[async_trait]
 pub trait SessionStore: Send + Sync {
@@ -157,6 +168,9 @@ pub trait SessionStore: Send + Sync {
 
     /// Find sessions by ID prefix.
     async fn find_by_prefix(&self, prefix: &str) -> Result<Vec<SessionSummary>>;
+
+    /// Get aggregated statistics, optionally filtered by time.
+    async fn get_aggregated_stats(&self, since: Option<DateTime<Utc>>) -> Result<AggregatedStats>;
 }
 
 /// SQLite-backed session storage.
@@ -817,6 +831,37 @@ impl SessionStore for SqliteSessionStore {
 
         let summaries: Vec<SessionSummary> = rows.filter_map(|r| r.ok()).collect();
         Ok(summaries)
+    }
+
+    async fn get_aggregated_stats(&self, since: Option<DateTime<Utc>>) -> Result<AggregatedStats> {
+        let conn = self.conn.lock().unwrap();
+
+        let sql = r#"
+            SELECT
+                COUNT(*) as session_count,
+                COALESCE(SUM(json_extract(metrics, '$.total_tokens_in')), 0) as tokens_in,
+                COALESCE(SUM(json_extract(metrics, '$.total_tokens_out')), 0) as tokens_out,
+                COALESCE(SUM(json_extract(metrics, '$.total_cost')), 0.0) as cost,
+                COALESCE(SUM(json_extract(metrics, '$.turn_count')), 0) as turns,
+                COALESCE(SUM(json_extract(metrics, '$.tool_calls')), 0) as tool_calls
+            FROM sessions
+            WHERE (?1 IS NULL OR last_active_at >= ?1)
+        "#;
+
+        let since_str = since.map(|dt| Self::format_datetime(&dt));
+
+        let stats = conn.query_row(sql, params![since_str], |row| {
+            Ok(AggregatedStats {
+                session_count: row.get(0)?,
+                total_tokens_in: row.get(1)?,
+                total_tokens_out: row.get(2)?,
+                total_cost: row.get(3)?,
+                total_turns: row.get(4)?,
+                total_tool_calls: row.get(5)?,
+            })
+        })?;
+
+        Ok(stats)
     }
 }
 

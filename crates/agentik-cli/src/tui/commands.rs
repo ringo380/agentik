@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use agentik_agent::{Agent, AgentMode};
 use agentik_session::{SessionQuery, SessionStore};
+use chrono::Utc;
 use git2::{Repository, StatusOptions};
 
 use crate::AppContext;
@@ -52,10 +53,12 @@ pub async fn handle_command(
         "/mode" => handle_mode_command(args, agent),
         "/tools" => handle_tools_command(args, agent),
         "/compact" => handle_compact_command(agent).await,
+        "/cost" => handle_cost_command(agent),
         "/add" => handle_add_command(args, store, agent).await,
         "/drop" => handle_drop_command(args, store, agent).await,
         "/files" => handle_files_command(agent),
         "/undo" => handle_undo_command(agent),
+        "/stats" => handle_stats_command(args, store).await,
         _ => CommandResult::Error(format!(
             "Unknown command: {}. Type /help for available commands.",
             command
@@ -88,6 +91,8 @@ fn print_help() {
     println!("  /mode <mode>     Switch mode (supervised, autonomous, planning, ask)");
     println!("  /tools           List available tools");
     println!("  /compact         Trigger context compaction");
+    println!("  /cost            Show session token usage and cost");
+    println!("  /stats [period]  Show usage statistics (today, week, month, all)");
     println!();
     println!("Context commands:");
     println!("  /add <path>      Add file or directory to context");
@@ -519,6 +524,91 @@ async fn handle_compact_command(agent: &mut Agent) -> CommandResult {
             CommandResult::Continue
         }
         Err(e) => CommandResult::Error(format!("Compaction failed: {}", e)),
+    }
+}
+
+/// Handle /cost command to show session token usage and cost.
+fn handle_cost_command(agent: &Agent) -> CommandResult {
+    let metrics = &agent.session().metadata.metrics;
+
+    println!("Session Cost");
+    println!("============");
+    println!();
+    println!(
+        "Tokens:     {} in / {} out ({} total)",
+        format_number(metrics.total_tokens_in),
+        format_number(metrics.total_tokens_out),
+        format_number(metrics.total_tokens_in + metrics.total_tokens_out)
+    );
+    println!("Cost:       ${:.4}", metrics.total_cost);
+    println!("Turns:      {}", metrics.turn_count);
+    println!("Tool calls: {}", metrics.tool_calls);
+    println!();
+    println!("Model: {}", agent.config().model);
+
+    CommandResult::Continue
+}
+
+/// Format a number with thousand separators.
+fn format_number(n: u64) -> String {
+    let s = n.to_string();
+    let mut result = String::new();
+    for (i, c) in s.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            result.insert(0, ',');
+        }
+        result.insert(0, c);
+    }
+    result
+}
+
+/// Handle /stats command to show aggregated usage statistics.
+async fn handle_stats_command(
+    args: &[&str],
+    store: &Arc<dyn SessionStore>,
+) -> CommandResult {
+    let period = args.first().copied().unwrap_or("all");
+
+    let (since, period_label) = match period {
+        "today" => {
+            let today = Utc::now()
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_utc();
+            (Some(today), "Today")
+        }
+        "week" => (Some(Utc::now() - chrono::Duration::days(7)), "This Week"),
+        "month" => (Some(Utc::now() - chrono::Duration::days(30)), "This Month"),
+        "all" => (None, "All Time"),
+        _ => {
+            return CommandResult::Error(format!(
+                "Unknown period: '{}'. Use: today, week, month, or all",
+                period
+            ));
+        }
+    };
+
+    match store.get_aggregated_stats(since).await {
+        Ok(stats) => {
+            println!("Usage Statistics ({})", period_label);
+            println!("============================");
+            println!();
+            println!("Sessions:    {}", stats.session_count);
+            println!("Turns:       {}", format_number(stats.total_turns as u64));
+            println!("Tool calls:  {}", format_number(stats.total_tool_calls as u64));
+            println!();
+            println!(
+                "Tokens:      {} in / {} out ({} total)",
+                format_number(stats.total_tokens_in),
+                format_number(stats.total_tokens_out),
+                format_number(stats.total_tokens_in + stats.total_tokens_out)
+            );
+            println!("Total cost:  ${:.4}", stats.total_cost);
+
+            CommandResult::Continue
+        }
+        Err(e) => CommandResult::Error(format!("Failed to get stats: {}", e)),
     }
 }
 

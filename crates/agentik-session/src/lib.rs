@@ -59,5 +59,6 @@ pub use recovery::{
     ValidationResult,
 };
 pub use store::{
-    AppendResult, SessionQuery, SessionStore, SessionSummary, SqliteSessionStore, StoreError,
+    AggregatedStats, AppendResult, SessionQuery, SessionStore, SessionSummary, SqliteSessionStore,
+    StoreError,
 };
