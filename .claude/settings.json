@@ -1,6 +1,0 @@
-{
-  "enabledPlugins": {
-    "playwright@claude-plugins-official": true,
-    "agents-language-specialists@buildwithclaude": true
-  }
-}

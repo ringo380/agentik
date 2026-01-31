@@ -28,6 +28,10 @@ Thumbs.db
 
 # Build artifacts
 *.log
+
+# Claude Code files (local only)
+CLAUDE.md
+.claude/
 *.tmp
 
 # Test artifacts
