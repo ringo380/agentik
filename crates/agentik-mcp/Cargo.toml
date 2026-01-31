@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 agentik-core = { workspace = true }
+agentik-tools = { workspace = true }
 
 # Async
 tokio = { workspace = true, features = ["process", "io-util"] }
@@ -29,6 +30,10 @@ reqwest = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
+
+# Unix signal handling (Unix only)
+[target.'cfg(unix)'.dependencies]
+nix = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -1243,6 +1243,17 @@ mod tests {
         async fn find_by_prefix(&self, _prefix: &str) -> Result<Vec<agentik_session::SessionSummary>, StoreError> {
             Ok(vec![])
         }
+
+        async fn get_aggregated_stats(&self, _since: Option<chrono::DateTime<chrono::Utc>>) -> Result<agentik_session::AggregatedStats, StoreError> {
+            Ok(agentik_session::AggregatedStats {
+                session_count: 0,
+                total_tokens_in: 0,
+                total_tokens_out: 0,
+                total_cost: 0.0,
+                total_turns: 0,
+                total_tool_calls: 0,
+            })
+        }
     }
 
     // ========================================================================
