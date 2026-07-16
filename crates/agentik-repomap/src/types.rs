@@ -259,7 +259,9 @@ impl RepoMap {
         files.sort_by(|a, b| {
             let rank_a = self.ranks.get(&a.path).unwrap_or(&0.0);
             let rank_b = self.ranks.get(&b.path).unwrap_or(&0.0);
-            rank_b.partial_cmp(rank_a).unwrap_or(std::cmp::Ordering::Equal)
+            rank_b
+                .partial_cmp(rank_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         files
     }
@@ -294,9 +296,7 @@ mod system_time_serde {
     where
         S: Serializer,
     {
-        let duration = time
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO);
+        let duration = time.duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO);
         duration.as_secs().serialize(serializer)
     }
 

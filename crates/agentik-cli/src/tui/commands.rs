@@ -198,14 +198,14 @@ async fn handle_session_title(
                 // Set new title
                 let new_title = args.join(" ");
                 if new_title.len() > 100 {
-                    return CommandResult::Error(
-                        "Title too long (max 100 characters)".to_string(),
-                    );
+                    return CommandResult::Error("Title too long (max 100 characters)".to_string());
                 }
                 meta.title = Some(new_title.clone());
                 match store.update_metadata(&meta).await {
                     Ok(()) => println!("Title set to: {}", new_title),
-                    Err(e) => return CommandResult::Error(format!("Failed to update title: {}", e)),
+                    Err(e) => {
+                        return CommandResult::Error(format!("Failed to update title: {}", e))
+                    }
                 }
             }
             CommandResult::Continue
@@ -225,9 +225,7 @@ async fn handle_session_tag(
             match args.first() {
                 Some(&"add") => {
                     if args.len() < 2 {
-                        return CommandResult::Error(
-                            "Usage: /session tag add <tag>".to_string(),
-                        );
+                        return CommandResult::Error("Usage: /session tag add <tag>".to_string());
                     }
                     let tag = args[1..].join(" ");
                     if tag.len() > 50 {
@@ -236,9 +234,7 @@ async fn handle_session_tag(
                         );
                     }
                     if tag.contains(',') {
-                        return CommandResult::Error(
-                            "Tags cannot contain commas".to_string(),
-                        );
+                        return CommandResult::Error("Tags cannot contain commas".to_string());
                     }
                     if meta.tags.contains(&tag) {
                         println!("Tag already exists: {}", tag);
@@ -399,7 +395,11 @@ async fn print_status(
     // Context manager info
     let context = agent.context_manager();
     let usage = context.calculate_usage(agent.session());
-    println!("Context tokens: {} ({:.1}% of max)", usage.total_tokens, usage.usage_percent * 100.0);
+    println!(
+        "Context tokens: {} ({:.1}% of max)",
+        usage.total_tokens,
+        usage.usage_percent * 100.0
+    );
     println!();
 
     // Config info
@@ -520,7 +520,11 @@ async fn handle_compact_command(agent: &mut Agent) -> CommandResult {
         Ok(()) => {
             let usage = agent.context_manager().calculate_usage(agent.session());
             println!("[Context compaction complete]");
-            println!("Current context tokens: {} ({:.1}% of max)", usage.total_tokens, usage.usage_percent * 100.0);
+            println!(
+                "Current context tokens: {} ({:.1}% of max)",
+                usage.total_tokens,
+                usage.usage_percent * 100.0
+            );
             CommandResult::Continue
         }
         Err(e) => CommandResult::Error(format!("Compaction failed: {}", e)),
@@ -563,10 +567,7 @@ fn format_number(n: u64) -> String {
 }
 
 /// Handle /stats command to show aggregated usage statistics.
-async fn handle_stats_command(
-    args: &[&str],
-    store: &Arc<dyn SessionStore>,
-) -> CommandResult {
+async fn handle_stats_command(args: &[&str], store: &Arc<dyn SessionStore>) -> CommandResult {
     let period = args.first().copied().unwrap_or("all");
 
     let (since, period_label) = match period {
@@ -596,7 +597,10 @@ async fn handle_stats_command(
             println!();
             println!("Sessions:    {}", stats.session_count);
             println!("Turns:       {}", format_number(stats.total_turns as u64));
-            println!("Tool calls:  {}", format_number(stats.total_tool_calls as u64));
+            println!(
+                "Tool calls:  {}",
+                format_number(stats.total_tool_calls as u64)
+            );
             println!();
             println!(
                 "Tokens:      {} in / {} out ({} total)",
@@ -748,11 +752,7 @@ async fn handle_drop_command(
         let pattern_str = pattern.to_string_lossy();
 
         // Get current files to match against
-        let current_files: Vec<PathBuf> = agent
-            .session()
-            .metadata
-            .added_files
-            .clone();
+        let current_files: Vec<PathBuf> = agent.session().metadata.added_files.clone();
 
         // Try glob pattern matching
         let matched: Vec<PathBuf> = current_files

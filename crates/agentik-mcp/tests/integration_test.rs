@@ -8,12 +8,11 @@ use std::sync::Arc;
 #[tokio::test]
 async fn test_filesystem_server() {
     // Create a server config for the filesystem MCP server
-    let config = McpServerConfig::new("filesystem", "npx")
-        .with_args(vec![
-            "-y".to_string(),
-            "@modelcontextprotocol/server-filesystem".to_string(),
-            "/private/tmp".to_string(), // Allow access to /tmp (use /private/tmp on macOS)
-        ]);
+    let config = McpServerConfig::new("filesystem", "npx").with_args(vec![
+        "-y".to_string(),
+        "@modelcontextprotocol/server-filesystem".to_string(),
+        "/private/tmp".to_string(), // Allow access to /tmp (use /private/tmp on macOS)
+    ]);
 
     let client = Arc::new(McpClient::new());
 
@@ -26,7 +25,10 @@ async fn test_filesystem_server() {
 
             // List tools
             let tools = conn.list_tools().await.expect("Failed to list tools");
-            println!("Available tools: {:?}", tools.iter().map(|t| &t.name).collect::<Vec<_>>());
+            println!(
+                "Available tools: {:?}",
+                tools.iter().map(|t| &t.name).collect::<Vec<_>>()
+            );
 
             assert!(!tools.is_empty(), "Server should have at least one tool");
 
@@ -72,12 +74,11 @@ async fn test_server_manager() {
     let manager = McpServerManager::new();
 
     // Add a server config
-    let config = McpServerConfig::new("filesystem", "npx")
-        .with_args(vec![
-            "-y".to_string(),
-            "@modelcontextprotocol/server-filesystem".to_string(),
-            "/tmp".to_string(),
-        ]);
+    let config = McpServerConfig::new("filesystem", "npx").with_args(vec![
+        "-y".to_string(),
+        "@modelcontextprotocol/server-filesystem".to_string(),
+        "/tmp".to_string(),
+    ]);
 
     manager.add_config(config).await;
 
@@ -94,7 +95,10 @@ async fn test_server_manager() {
             println!("Server status: {}", status);
 
             // Stop the server
-            manager.stop_server("filesystem").await.expect("Failed to stop server");
+            manager
+                .stop_server("filesystem")
+                .await
+                .expect("Failed to stop server");
             assert!(!manager.is_connected("filesystem").await);
 
             println!("Server stopped successfully");
@@ -113,12 +117,11 @@ async fn test_tool_wrapper() {
 
     let manager = McpServerManager::new();
 
-    let config = McpServerConfig::new("filesystem", "npx")
-        .with_args(vec![
-            "-y".to_string(),
-            "@modelcontextprotocol/server-filesystem".to_string(),
-            "/tmp".to_string(),
-        ]);
+    let config = McpServerConfig::new("filesystem", "npx").with_args(vec![
+        "-y".to_string(),
+        "@modelcontextprotocol/server-filesystem".to_string(),
+        "/tmp".to_string(),
+    ]);
 
     manager.add_config(config).await;
 
@@ -144,7 +147,11 @@ async fn test_tool_wrapper() {
             // Verify tool name parsing
             for tool_name in &mcp_tools {
                 let parsed = McpToolWrapper::parse_tool_name(tool_name);
-                assert!(parsed.is_some(), "Should parse MCP tool name: {}", tool_name);
+                assert!(
+                    parsed.is_some(),
+                    "Should parse MCP tool name: {}",
+                    tool_name
+                );
                 let (server, tool) = parsed.unwrap();
                 assert_eq!(server, "filesystem");
                 println!("  {} -> server={}, tool={}", tool_name, server, tool);

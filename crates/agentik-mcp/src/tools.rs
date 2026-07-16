@@ -106,7 +106,11 @@ impl Tool for McpToolWrapper {
         // Call the MCP tool
         let mcp_result = self
             .client
-            .call_tool(&self.server_name, &self.tool_name, Some(call.arguments.clone()))
+            .call_tool(
+                &self.server_name,
+                &self.tool_name,
+                Some(call.arguments.clone()),
+            )
             .await
             .map_err(|e| ToolError::Execution(e.to_string()))?;
 
@@ -145,7 +149,9 @@ pub async fn create_mcp_tools(client: Arc<McpClient>) -> Vec<McpToolWrapper> {
     let all_tools = client.all_tools().await;
     all_tools
         .into_iter()
-        .map(|(server_name, tool_def)| McpToolWrapper::new(server_name, tool_def, Arc::clone(&client)))
+        .map(|(server_name, tool_def)| {
+            McpToolWrapper::new(server_name, tool_def, Arc::clone(&client))
+        })
         .collect()
 }
 
@@ -189,10 +195,16 @@ mod tests {
     #[test]
     fn test_parse_tool_name() {
         let result = McpToolWrapper::parse_tool_name("mcp__filesystem__read_file");
-        assert_eq!(result, Some(("filesystem".to_string(), "read_file".to_string())));
+        assert_eq!(
+            result,
+            Some(("filesystem".to_string(), "read_file".to_string()))
+        );
 
         let result = McpToolWrapper::parse_tool_name("mcp__github__create_issue");
-        assert_eq!(result, Some(("github".to_string(), "create_issue".to_string())));
+        assert_eq!(
+            result,
+            Some(("github".to_string(), "create_issue".to_string()))
+        );
 
         // Invalid names
         let result = McpToolWrapper::parse_tool_name("not_mcp_tool");

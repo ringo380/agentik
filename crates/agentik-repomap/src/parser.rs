@@ -40,7 +40,9 @@ impl TreeSitterParser {
     pub fn new() -> Result<Self, ParseError> {
         Ok(Self {
             rust_parser: Self::create_parser(tree_sitter_rust::LANGUAGE.into())?,
-            typescript_parser: Self::create_parser(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?,
+            typescript_parser: Self::create_parser(
+                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            )?,
             javascript_parser: Self::create_parser(tree_sitter_javascript::LANGUAGE.into())?,
             python_parser: Self::create_parser(tree_sitter_python::LANGUAGE.into())?,
             go_parser: Self::create_parser(tree_sitter_go::LANGUAGE.into())?,
@@ -250,7 +252,10 @@ impl TreeSitterParser {
         for i in 0..node.child_count() {
             if let Some(child) = node.child(i) {
                 if child.kind() == "identifier" {
-                    return child.utf8_text(content.as_bytes()).ok().map(|s| s.to_string());
+                    return child
+                        .utf8_text(content.as_bytes())
+                        .ok()
+                        .map(|s| s.to_string());
                 }
             }
         }
@@ -280,7 +285,10 @@ impl TreeSitterParser {
     }
 
     /// Parse TypeScript source code.
-    fn parse_typescript(&mut self, content: &str) -> Result<(Vec<Symbol>, Vec<Import>), ParseError> {
+    fn parse_typescript(
+        &mut self,
+        content: &str,
+    ) -> Result<(Vec<Symbol>, Vec<Import>), ParseError> {
         let tree = self
             .typescript_parser
             .parse(content, None)
@@ -298,7 +306,10 @@ impl TreeSitterParser {
     }
 
     /// Parse JavaScript source code.
-    fn parse_javascript(&mut self, content: &str) -> Result<(Vec<Symbol>, Vec<Import>), ParseError> {
+    fn parse_javascript(
+        &mut self,
+        content: &str,
+    ) -> Result<(Vec<Symbol>, Vec<Import>), ParseError> {
         let tree = self
             .javascript_parser
             .parse(content, None)
@@ -796,7 +807,8 @@ impl TreeSitterParser {
                                 for k in 0..spec.child_count() {
                                     if let Some(str_node) = spec.child(k) {
                                         if str_node.kind() == "interpreted_string_literal" {
-                                            if let Ok(path) = str_node.utf8_text(content.as_bytes()) {
+                                            if let Ok(path) = str_node.utf8_text(content.as_bytes())
+                                            {
                                                 let path = path.trim_matches('"');
                                                 imports.push(Import::new(path, line));
                                             }
@@ -972,9 +984,7 @@ fn hello_world(name: &str) -> String {
 }
 "#;
 
-        let file = parser
-            .parse_file(Path::new("test.rs"), content)
-            .unwrap();
+        let file = parser.parse_file(Path::new("test.rs"), content).unwrap();
 
         assert_eq!(file.symbols.len(), 1);
         assert_eq!(file.symbols[0].name, "hello_world");
@@ -1001,9 +1011,7 @@ impl MyStruct {
 }
 "#;
 
-        let file = parser
-            .parse_file(Path::new("test.rs"), content)
-            .unwrap();
+        let file = parser.parse_file(Path::new("test.rs"), content).unwrap();
 
         // Should have: struct + 2 methods
         assert!(file.symbols.len() >= 3);
@@ -1023,9 +1031,7 @@ use std::collections::HashMap;
 use crate::types;
 "#;
 
-        let file = parser
-            .parse_file(Path::new("test.rs"), content)
-            .unwrap();
+        let file = parser.parse_file(Path::new("test.rs"), content).unwrap();
 
         // Should capture use statements
         // Note: The parser captures the use tree structure, not the full path
@@ -1051,9 +1057,7 @@ export function helper(x: number): number {
 }
 "#;
 
-        let file = parser
-            .parse_file(Path::new("test.ts"), content)
-            .unwrap();
+        let file = parser.parse_file(Path::new("test.ts"), content).unwrap();
 
         assert!(file.imports.len() >= 1);
         assert!(file.symbols.iter().any(|s| s.name == "MyClass"));
@@ -1078,9 +1082,7 @@ def helper(x: int) -> int:
     return x * 2
 "#;
 
-        let file = parser
-            .parse_file(Path::new("test.py"), content)
-            .unwrap();
+        let file = parser.parse_file(Path::new("test.py"), content).unwrap();
 
         assert!(file.imports.len() >= 1);
         assert!(file.symbols.iter().any(|s| s.name == "MyClass"));

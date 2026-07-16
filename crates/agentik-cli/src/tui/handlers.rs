@@ -155,9 +155,7 @@ impl CliPermissionHandler {
         eprintln!("║  Tool: {:<54} ║", tool_name);
         eprintln!("║  Description: {:<47} ║", truncate(tool_desc, 47));
         if is_destructive {
-            eprintln!(
-                "║  Warning: This tool is marked as DESTRUCTIVE                  ║"
-            );
+            eprintln!("║  Warning: This tool is marked as DESTRUCTIVE                  ║");
         }
         eprintln!("╠══════════════════════════════════════════════════════════════╣");
         eprintln!("║  Arguments:                                                   ║");
@@ -251,7 +249,11 @@ impl PermissionHandler for CliPermissionHandler {
     }
 
     fn on_complete(&self, call: &ToolCall, result: &ToolResult) {
-        let status = if result.success { "completed" } else { "failed" };
+        let status = if result.success {
+            "completed"
+        } else {
+            "failed"
+        };
         eprintln!(
             "[Tool: {}] {} ({}ms)",
             call.name, status, result.duration_ms

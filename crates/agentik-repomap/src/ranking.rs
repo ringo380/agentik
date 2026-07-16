@@ -112,7 +112,11 @@ impl PageRankScorer {
         }
 
         // Build index mapping
-        let file_to_idx: HashMap<_, _> = files.iter().enumerate().map(|(i, f)| (f.clone(), i)).collect();
+        let file_to_idx: HashMap<_, _> = files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| (f.clone(), i))
+            .collect();
 
         // Initialize scores
         let initial_score = 1.0 / n as f64;
@@ -146,10 +150,7 @@ impl PageRankScorer {
             .collect();
 
         // Count outgoing links (dependencies) for normalization
-        let out_degrees: Vec<usize> = files
-            .iter()
-            .map(|f| graph.out_degree(f))
-            .collect();
+        let out_degrees: Vec<usize> = files.iter().map(|f| graph.out_degree(f)).collect();
 
         let damping = self.config.damping;
 
@@ -207,10 +208,7 @@ impl PageRankScorer {
         }
 
         // Build result map
-        files
-            .into_iter()
-            .zip(scores)
-            .collect()
+        files.into_iter().zip(scores).collect()
     }
 
     /// Rank files by their PageRank score (highest first).

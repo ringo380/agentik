@@ -186,10 +186,7 @@ impl RepoMapBuilder {
             }
         }
 
-        info!(
-            "Parsed {} files ({} errors)",
-            file_count, parse_errors
-        );
+        info!("Parsed {} files ({} errors)", file_count, parse_errors);
 
         // Build dependency graph and compute ranks
         let graph = DependencyGraph::build(&map);

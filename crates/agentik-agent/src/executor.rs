@@ -198,7 +198,11 @@ impl ToolExecutor {
     /// Check if a tool is always denied.
     pub fn is_denied(&self, tool_name: &str) -> Option<DenialReason> {
         // Check if in always_deny list
-        if self.permissions.always_deny.contains(&tool_name.to_string()) {
+        if self
+            .permissions
+            .always_deny
+            .contains(&tool_name.to_string())
+        {
             return Some(DenialReason::AlwaysDenied);
         }
 
@@ -480,7 +484,11 @@ mod tests {
         }
     }
 
-    fn create_test_tool_definition(name: &str, requires_approval: bool, destructive: bool) -> ToolDefinition {
+    fn create_test_tool_definition(
+        name: &str,
+        requires_approval: bool,
+        destructive: bool,
+    ) -> ToolDefinition {
         let mut def = ToolDefinition::new(name, "Test tool");
         def.category = ToolCategory::External;
         def.requires_approval = requires_approval;
@@ -601,8 +609,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_tool_not_found() {
-        let executor = ExecutorBuilder::new()
-            .build(Arc::new(AutoApproveHandler));
+        let executor = ExecutorBuilder::new().build(Arc::new(AutoApproveHandler));
 
         let call = ToolCall::new("1", "nonexistent", serde_json::json!({}));
         let result = executor.execute(&call).await;
@@ -687,8 +694,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_batch_empty() {
-        let executor = ExecutorBuilder::new()
-            .build(Arc::new(AutoApproveHandler));
+        let executor = ExecutorBuilder::new().build(Arc::new(AutoApproveHandler));
 
         let results = executor.execute_batch(&[]).await;
         assert!(results.is_empty());
@@ -696,8 +702,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_batch_multiple() {
-        let executor = ExecutorBuilder::new()
-            .build(Arc::new(AutoApproveHandler));
+        let executor = ExecutorBuilder::new().build(Arc::new(AutoApproveHandler));
 
         let calls = vec![
             ToolCall::new("1", "nonexistent1", serde_json::json!({})),
@@ -718,8 +723,7 @@ mod tests {
 
     #[test]
     fn test_builder_defaults() {
-        let executor = ExecutorBuilder::new()
-            .build(Arc::new(AutoApproveHandler));
+        let executor = ExecutorBuilder::new().build(Arc::new(AutoApproveHandler));
 
         assert!(executor.registry().is_empty());
         assert_eq!(executor.mode(), AgentMode::Autonomous);

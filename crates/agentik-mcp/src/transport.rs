@@ -86,19 +86,13 @@ impl StdioTransport {
 
         let mut child = cmd.spawn().map_err(TransportError::SpawnFailed)?;
 
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| TransportError::SpawnFailed(std::io::Error::other(
-                "Failed to capture stdin",
-            )))?;
+        let stdin = child.stdin.take().ok_or_else(|| {
+            TransportError::SpawnFailed(std::io::Error::other("Failed to capture stdin"))
+        })?;
 
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| TransportError::SpawnFailed(std::io::Error::other(
-                "Failed to capture stdout",
-            )))?;
+        let stdout = child.stdout.take().ok_or_else(|| {
+            TransportError::SpawnFailed(std::io::Error::other("Failed to capture stdout"))
+        })?;
 
         let stdout = BufReader::new(stdout);
 
@@ -236,13 +230,7 @@ mod tests {
     #[tokio::test]
     async fn test_stdio_transport_echo() {
         // Use 'cat' as a simple echo server for testing
-        let transport = StdioTransport::spawn(
-            "cat",
-            &[],
-            HashMap::new(),
-            None,
-        )
-        .await;
+        let transport = StdioTransport::spawn("cat", &[], HashMap::new(), None).await;
 
         // This may fail on Windows if 'cat' is not available
         if let Ok(mut transport) = transport {
@@ -263,13 +251,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transport_not_connected() {
-        let transport = StdioTransport::spawn(
-            "cat",
-            &[],
-            HashMap::new(),
-            None,
-        )
-        .await;
+        let transport = StdioTransport::spawn("cat", &[], HashMap::new(), None).await;
 
         if let Ok(mut transport) = transport {
             transport.close().await.unwrap();

@@ -162,7 +162,10 @@ impl McpServerManager {
         if let Some(connection) = self.client.get(name).await {
             let state = connection.state().await;
             let tool_count = connection.tools().await.len();
-            ServerStatus::Connected { state: state.to_string(), tool_count }
+            ServerStatus::Connected {
+                state: state.to_string(),
+                tool_count,
+            }
         } else {
             ServerStatus::Disconnected
         }

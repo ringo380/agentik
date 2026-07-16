@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher, Event, EventKind};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tracing::{debug, info, warn};
 
 use crate::types::RepoMap;
@@ -80,8 +80,7 @@ impl RepoMapCache {
     /// Create a new cache for a repository.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         let extensions: HashSet<String> = [
-            "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs",
-            "py", "pyi", "go", "java",
+            "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "pyi", "go", "java",
         ]
         .iter()
         .map(|s| s.to_string())
@@ -177,14 +176,12 @@ impl RepoMapCache {
         let root = self.root.clone();
 
         let mut watcher = RecommendedWatcher::new(
-            move |result: Result<Event, notify::Error>| {
-                match result {
-                    Ok(event) => {
-                        Self::handle_event(&event, &pending, &extensions, &root);
-                    }
-                    Err(e) => {
-                        warn!("File watcher error: {}", e);
-                    }
+            move |result: Result<Event, notify::Error>| match result {
+                Ok(event) => {
+                    Self::handle_event(&event, &pending, &extensions, &root);
+                }
+                Err(e) => {
+                    warn!("File watcher error: {}", e);
                 }
             },
             Config::default(),
@@ -306,7 +303,10 @@ mod tests {
     #[test]
     fn test_cache_path() {
         let cache = RepoMapCache::new("/project");
-        assert_eq!(cache.cache_path(), PathBuf::from("/project/.agentik/repomap.json"));
+        assert_eq!(
+            cache.cache_path(),
+            PathBuf::from("/project/.agentik/repomap.json")
+        );
     }
 
     #[test]
@@ -365,12 +365,28 @@ mod tests {
 
     #[test]
     fn test_should_track_file() {
-        let extensions: HashSet<String> = ["rs", "ts", "py"].iter().map(|s| s.to_string()).collect();
+        let extensions: HashSet<String> =
+            ["rs", "ts", "py"].iter().map(|s| s.to_string()).collect();
 
-        assert!(RepoMapCache::should_track_file(Path::new("test.rs"), &extensions));
-        assert!(RepoMapCache::should_track_file(Path::new("test.ts"), &extensions));
-        assert!(RepoMapCache::should_track_file(Path::new("test.py"), &extensions));
-        assert!(!RepoMapCache::should_track_file(Path::new("test.txt"), &extensions));
-        assert!(!RepoMapCache::should_track_file(Path::new("test"), &extensions));
+        assert!(RepoMapCache::should_track_file(
+            Path::new("test.rs"),
+            &extensions
+        ));
+        assert!(RepoMapCache::should_track_file(
+            Path::new("test.ts"),
+            &extensions
+        ));
+        assert!(RepoMapCache::should_track_file(
+            Path::new("test.py"),
+            &extensions
+        ));
+        assert!(!RepoMapCache::should_track_file(
+            Path::new("test.txt"),
+            &extensions
+        ));
+        assert!(!RepoMapCache::should_track_file(
+            Path::new("test"),
+            &extensions
+        ));
     }
 }

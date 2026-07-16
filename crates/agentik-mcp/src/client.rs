@@ -165,8 +165,7 @@ impl McpConnection {
         *self.server_capabilities.write().await = Some(result.capabilities);
 
         // Send initialized notification
-        self.notify::<()>("notifications/initialized", None)
-            .await?;
+        self.notify::<()>("notifications/initialized", None).await?;
 
         // Update state
         *self.state.write().await = ConnectionState::Ready;
@@ -433,9 +432,8 @@ impl McpClient {
 
     /// Refresh tools from all connected servers.
     pub async fn refresh_tools(&self) -> Result<(), McpError> {
-        let connections: Vec<Arc<McpConnection>> = {
-            self.connections.read().await.values().cloned().collect()
-        };
+        let connections: Vec<Arc<McpConnection>> =
+            { self.connections.read().await.values().cloned().collect() };
 
         for connection in connections {
             if connection.is_ready().await {

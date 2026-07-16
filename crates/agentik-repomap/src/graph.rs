@@ -70,7 +70,10 @@ impl DependencyGraph {
             return; // No self-loops
         }
 
-        self.dependencies.entry(from.clone()).or_default().insert(to.clone());
+        self.dependencies
+            .entry(from.clone())
+            .or_default()
+            .insert(to.clone());
         self.dependents.entry(to).or_default().insert(from);
     }
 
@@ -138,11 +141,15 @@ impl DependencyGraph {
         known_files: &HashSet<PathBuf>,
     ) -> Option<PathBuf> {
         match language {
-            Language::Rust => Self::resolve_rust_import(root, source_file, import_path, known_files),
+            Language::Rust => {
+                Self::resolve_rust_import(root, source_file, import_path, known_files)
+            }
             Language::TypeScript | Language::JavaScript => {
                 Self::resolve_ts_import(root, source_file, import_path, known_files)
             }
-            Language::Python => Self::resolve_python_import(root, source_file, import_path, known_files),
+            Language::Python => {
+                Self::resolve_python_import(root, source_file, import_path, known_files)
+            }
             Language::Go => Self::resolve_go_import(root, import_path, known_files),
             Language::Java => Self::resolve_java_import(root, import_path, known_files),
             Language::Unknown => None,
@@ -302,14 +309,20 @@ impl DependencyGraph {
             let remaining: String = chars.collect();
             let module_path = remaining.replace('.', "/");
 
-            return Self::try_python_module_paths(root, &current_dir.join(&module_path), known_files);
+            return Self::try_python_module_paths(
+                root,
+                &current_dir.join(&module_path),
+                known_files,
+            );
         }
 
         // Absolute import - try to find in the repo
         let module_path = import_path.replace('.', "/");
 
         // Try from root
-        if let Some(path) = Self::try_python_module_paths(root, &root.join(&module_path), known_files) {
+        if let Some(path) =
+            Self::try_python_module_paths(root, &root.join(&module_path), known_files)
+        {
             return Some(path);
         }
 
@@ -321,7 +334,9 @@ impl DependencyGraph {
                 root.join(src_dir)
             };
 
-            if let Some(path) = Self::try_python_module_paths(root, &base.join(&module_path), known_files) {
+            if let Some(path) =
+                Self::try_python_module_paths(root, &base.join(&module_path), known_files)
+            {
                 return Some(path);
             }
         }

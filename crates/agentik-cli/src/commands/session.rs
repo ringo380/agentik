@@ -419,10 +419,7 @@ async fn handle_title<S: agentik_session::store::SessionStore>(
                     println!("Title set to: {}", new_title);
                 }
                 None => {
-                    println!(
-                        "Title: {}",
-                        meta.title.as_deref().unwrap_or("(untitled)")
-                    );
+                    println!("Title: {}", meta.title.as_deref().unwrap_or("(untitled)"));
                 }
             }
         }

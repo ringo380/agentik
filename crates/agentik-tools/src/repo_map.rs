@@ -89,9 +89,9 @@ impl Tool for GetRepoMapTool {
     async fn execute(&self, call: &ToolCall, _ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         // Get the repo map
         let guard = self.repo_map.read().unwrap();
-        let map = guard
-            .as_ref()
-            .ok_or_else(|| ToolError::execution("Repository map not available. Build the repo map first."))?;
+        let map = guard.as_ref().ok_or_else(|| {
+            ToolError::execution("Repository map not available. Build the repo map first.")
+        })?;
 
         // Parse parameters
         let focus_files: Vec<PathBuf> = call
@@ -106,10 +106,7 @@ impl Tool for GetRepoMapTool {
             })
             .unwrap_or_default();
 
-        let query = call
-            .arguments
-            .get("query")
-            .and_then(|v| v.as_str());
+        let query = call.arguments.get("query").and_then(|v| v.as_str());
 
         let max_files = call
             .arguments
@@ -140,12 +137,7 @@ impl Tool for GetRepoMapTool {
             let mut boosted_map = map.clone();
             boosted_map.ranks = boosted_ranks;
 
-            RepoMapSerializer::serialize_for_tool(
-                &boosted_map,
-                Some(&focus_files),
-                query,
-                &config,
-            )
+            RepoMapSerializer::serialize_for_tool(&boosted_map, Some(&focus_files), query, &config)
         } else {
             RepoMapSerializer::serialize_for_tool(map, None, query, &config)
         };
@@ -157,7 +149,10 @@ impl Tool for GetRepoMapTool {
             map.symbol_count()
         );
 
-        Ok(ToolResult::success(&call.id, format!("{}{}", output, summary)))
+        Ok(ToolResult::success(
+            &call.id,
+            format!("{}{}", output, summary),
+        ))
     }
 }
 
@@ -194,11 +189,7 @@ mod tests {
         let tool = GetRepoMapTool::empty();
         tool.set_repo_map(create_test_map());
 
-        let call = ToolCall::new(
-            "test_call",
-            "GetRepoMap",
-            json!({}),
-        );
+        let call = ToolCall::new("test_call", "GetRepoMap", json!({}));
 
         let ctx = ToolContext::new("/project");
         let result = tool.execute(&call, &ctx).await.unwrap();
@@ -213,11 +204,7 @@ mod tests {
         let tool = GetRepoMapTool::empty();
         tool.set_repo_map(create_test_map());
 
-        let call = ToolCall::new(
-            "test_call",
-            "GetRepoMap",
-            json!({"query": "Handler"}),
-        );
+        let call = ToolCall::new("test_call", "GetRepoMap", json!({"query": "Handler"}));
 
         let ctx = ToolContext::new("/project");
         let result = tool.execute(&call, &ctx).await.unwrap();
@@ -251,11 +238,7 @@ mod tests {
         let tool = GetRepoMapTool::empty();
         tool.set_repo_map(create_test_map());
 
-        let call = ToolCall::new(
-            "test_call",
-            "GetRepoMap",
-            json!({"max_files": 1}),
-        );
+        let call = ToolCall::new("test_call", "GetRepoMap", json!({"max_files": 1}));
 
         let ctx = ToolContext::new("/project");
         let result = tool.execute(&call, &ctx).await.unwrap();
@@ -268,11 +251,7 @@ mod tests {
     async fn test_get_repo_map_not_built() {
         let tool = GetRepoMapTool::empty();
 
-        let call = ToolCall::new(
-            "test_call",
-            "GetRepoMap",
-            json!({}),
-        );
+        let call = ToolCall::new("test_call", "GetRepoMap", json!({}));
 
         let ctx = ToolContext::new("/project");
         let result = tool.execute(&call, &ctx).await;

@@ -320,8 +320,7 @@ mod tests {
 
         let mut file1 = FileInfo::new("src/main.rs", Language::Rust);
         file1.symbols = vec![
-            Symbol::new("main", SymbolKind::Function, 1)
-                .with_signature("fn main()"),
+            Symbol::new("main", SymbolKind::Function, 1).with_signature("fn main()"),
             Symbol::new("Config", SymbolKind::Struct, 10),
         ];
 

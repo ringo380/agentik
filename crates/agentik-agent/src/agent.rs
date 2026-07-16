@@ -20,9 +20,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use agentik_core::{Message, Session, ToolCall, ToolDefinition, ToolResult};
-use agentik_repomap::{RepoMap, RepoMapSerializer, SerializeConfig};
 use agentik_providers::traits::{ToolCallDelta, Usage};
 use agentik_providers::{CompletionRequest, CompletionResponse, Provider, StreamChunk};
+use agentik_repomap::{RepoMap, RepoMapSerializer, SerializeConfig};
 use agentik_session::{ContextManager, SessionStore};
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -389,7 +389,11 @@ impl Agent {
     ///
     /// Returns a compact text representation of the most important files,
     /// limited by the specified token budget. Focus files are given priority.
-    fn get_repo_map_for_prompt(&self, token_budget: usize, focus_files: &[PathBuf]) -> Option<String> {
+    fn get_repo_map_for_prompt(
+        &self,
+        token_budget: usize,
+        focus_files: &[PathBuf],
+    ) -> Option<String> {
         let guard = self.repo_map.read().unwrap();
         let map = guard.as_ref()?;
 
@@ -403,10 +407,7 @@ impl Agent {
         if serialized.is_empty() {
             None
         } else {
-            Some(format!(
-                "<repository_map>\n{}</repository_map>",
-                serialized
-            ))
+            Some(format!("<repository_map>\n{}</repository_map>", serialized))
         }
     }
 
@@ -484,10 +485,7 @@ impl Agent {
     }
 
     /// Load a session by ID.
-    pub async fn load_session(
-        store: Arc<dyn SessionStore>,
-        id: &str,
-    ) -> AgentResult<Session> {
+    pub async fn load_session(store: Arc<dyn SessionStore>, id: &str) -> AgentResult<Session> {
         store
             .get(id)
             .await
@@ -661,10 +659,7 @@ impl Agent {
         }
 
         // Get final content from last step
-        let content = steps
-            .last()
-            .map(|s| s.content.clone())
-            .unwrap_or_default();
+        let content = steps.last().map(|s| s.content.clone()).unwrap_or_default();
 
         let response = AgentResponse {
             content,
@@ -989,7 +984,14 @@ impl AgentBuilder {
             .event_handler
             .unwrap_or_else(|| Arc::new(NoOpEventHandler));
 
-        let mut agent = Agent::new(provider, executor, store, session, self.config, event_handler);
+        let mut agent = Agent::new(
+            provider,
+            executor,
+            store,
+            session,
+            self.config,
+            event_handler,
+        );
         agent.set_mode(self.mode);
 
         // Set repo map if provided
@@ -1078,15 +1080,21 @@ mod tests {
             true
         }
 
-        async fn complete(&self, _request: CompletionRequest) -> anyhow::Result<CompletionResponse> {
+        async fn complete(
+            &self,
+            _request: CompletionRequest,
+        ) -> anyhow::Result<CompletionResponse> {
             let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
             let responses = self.responses.lock().unwrap();
-            let response = responses.get(idx).cloned().unwrap_or_else(|| CompletionResponse {
-                content: "No more responses".to_string(),
-                tool_calls: vec![],
-                finish_reason: FinishReason::Stop,
-                usage: Usage::default(),
-            });
+            let response = responses
+                .get(idx)
+                .cloned()
+                .unwrap_or_else(|| CompletionResponse {
+                    content: "No more responses".to_string(),
+                    tool_calls: vec![],
+                    finish_reason: FinishReason::Stop,
+                    usage: Usage::default(),
+                });
             Ok(response)
         }
 
@@ -1167,11 +1175,17 @@ mod tests {
                 .ok_or_else(|| StoreError::NotFound(id.to_string()))
         }
 
-        async fn get_metadata(&self, id: &str) -> Result<agentik_core::SessionMetadata, StoreError> {
+        async fn get_metadata(
+            &self,
+            id: &str,
+        ) -> Result<agentik_core::SessionMetadata, StoreError> {
             self.get(id).await.map(|s| s.metadata)
         }
 
-        async fn update_metadata(&self, metadata: &agentik_core::SessionMetadata) -> Result<(), StoreError> {
+        async fn update_metadata(
+            &self,
+            metadata: &agentik_core::SessionMetadata,
+        ) -> Result<(), StoreError> {
             let mut sessions = self.sessions.lock().unwrap();
             if let Some(session) = sessions.get_mut(&metadata.id) {
                 session.metadata = metadata.clone();
@@ -1185,15 +1199,24 @@ mod tests {
             Ok(())
         }
 
-        async fn list(&self, _query: &agentik_session::SessionQuery) -> Result<Vec<agentik_session::SessionSummary>, StoreError> {
+        async fn list(
+            &self,
+            _query: &agentik_session::SessionQuery,
+        ) -> Result<Vec<agentik_session::SessionSummary>, StoreError> {
             Ok(vec![])
         }
 
-        async fn get_most_recent(&self) -> Result<Option<agentik_session::SessionSummary>, StoreError> {
+        async fn get_most_recent(
+            &self,
+        ) -> Result<Option<agentik_session::SessionSummary>, StoreError> {
             Ok(None)
         }
 
-        async fn append_message(&self, session_id: &str, message: &Message) -> Result<agentik_session::AppendResult, StoreError> {
+        async fn append_message(
+            &self,
+            session_id: &str,
+            message: &Message,
+        ) -> Result<agentik_session::AppendResult, StoreError> {
             let mut sessions = self.sessions.lock().unwrap();
             if let Some(session) = sessions.get_mut(session_id) {
                 session.messages.push(message.clone());
@@ -1232,7 +1255,11 @@ mod tests {
             Ok(())
         }
 
-        async fn set_state(&self, _id: &str, _state: agentik_core::SessionState) -> Result<(), StoreError> {
+        async fn set_state(
+            &self,
+            _id: &str,
+            _state: agentik_core::SessionState,
+        ) -> Result<(), StoreError> {
             Ok(())
         }
 
@@ -1240,11 +1267,17 @@ mod tests {
             Ok(())
         }
 
-        async fn find_by_prefix(&self, _prefix: &str) -> Result<Vec<agentik_session::SessionSummary>, StoreError> {
+        async fn find_by_prefix(
+            &self,
+            _prefix: &str,
+        ) -> Result<Vec<agentik_session::SessionSummary>, StoreError> {
             Ok(vec![])
         }
 
-        async fn get_aggregated_stats(&self, _since: Option<chrono::DateTime<chrono::Utc>>) -> Result<agentik_session::AggregatedStats, StoreError> {
+        async fn get_aggregated_stats(
+            &self,
+            _since: Option<chrono::DateTime<chrono::Utc>>,
+        ) -> Result<agentik_session::AggregatedStats, StoreError> {
             Ok(agentik_session::AggregatedStats {
                 session_count: 0,
                 total_tokens_in: 0,
@@ -1479,14 +1512,12 @@ mod tests {
             > {
                 // Use non-streaming for simplicity in test
                 let response = self.complete(request).await?;
-                Ok(Box::pin(stream::iter(vec![
-                    Ok(StreamChunk {
-                        delta: Some(response.content),
-                        tool_call_delta: None,
-                        is_final: true,
-                        usage: Some(response.usage),
-                    }),
-                ])))
+                Ok(Box::pin(stream::iter(vec![Ok(StreamChunk {
+                    delta: Some(response.content),
+                    tool_call_delta: None,
+                    is_final: true,
+                    usage: Some(response.usage),
+                })])))
             }
         }
 
@@ -1610,12 +1641,21 @@ mod tests {
 
         agent.set_mode(AgentMode::Planning);
         assert!(agent.mode_system_prompt().is_some());
-        assert!(agent.mode_system_prompt().unwrap().contains("planning mode"));
+        assert!(agent
+            .mode_system_prompt()
+            .unwrap()
+            .contains("planning mode"));
 
         agent.set_mode(AgentMode::Architect);
-        assert!(agent.mode_system_prompt().unwrap().contains("architect mode"));
+        assert!(agent
+            .mode_system_prompt()
+            .unwrap()
+            .contains("architect mode"));
 
         agent.set_mode(AgentMode::AskOnly);
-        assert!(agent.mode_system_prompt().unwrap().contains("ask-only mode"));
+        assert!(agent
+            .mode_system_prompt()
+            .unwrap()
+            .contains("ask-only mode"));
     }
 }

@@ -128,7 +128,10 @@ mod tests {
         assert_eq!(err.to_string(), "server not found: test-server");
 
         let err = McpError::server_error(-32600, "Invalid request");
-        assert_eq!(err.to_string(), "server error (code -32600): Invalid request");
+        assert_eq!(
+            err.to_string(),
+            "server error (code -32600): Invalid request"
+        );
     }
 
     #[test]
