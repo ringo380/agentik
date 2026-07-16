@@ -449,7 +449,7 @@ impl Tool for GlobTool {
         }
 
         // Sort by mtime (most recent first)
-        matches.sort_by(|a, b| b.1.cmp(&a.1));
+        matches.sort_by_key(|m| std::cmp::Reverse(m.1));
 
         // Format output
         let output = if matches.is_empty() {

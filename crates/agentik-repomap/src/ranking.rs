@@ -275,7 +275,7 @@ mod tests {
 
         // Files with more incoming links should have higher scores
         // utils.rs and helper.rs are imported, main.rs is not
-        let main_score = scores.get(&PathBuf::from("main.rs")).unwrap();
+        let _main_score = scores.get(&PathBuf::from("main.rs")).unwrap();
         let lib_score = scores.get(&PathBuf::from("lib.rs")).unwrap();
 
         // lib.rs is imported by main.rs, so should have decent score

@@ -306,7 +306,7 @@ impl RepoMapSerializer {
     /// Estimate token count (rough approximation: ~4 chars per token).
     fn estimate_tokens(text: &str) -> usize {
         // Simple heuristic: tokens are roughly 4 characters on average
-        (text.len() + 3) / 4
+        text.len().div_ceil(4)
     }
 }
 

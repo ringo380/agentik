@@ -28,7 +28,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::executor::ToolExecutor;
 use crate::modes::AgentMode;
@@ -1044,6 +1044,9 @@ mod tests {
             }])
         }
 
+        // Companion to `new` for exercising the tool-call path; kept for the
+        // tool-call tests even while no test currently calls it.
+        #[allow(dead_code)]
         fn with_tool_call(tool_name: &str, args: serde_json::Value, final_response: &str) -> Self {
             Self::new(vec![
                 CompletionResponse {

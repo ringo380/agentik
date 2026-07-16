@@ -973,7 +973,6 @@ impl Default for TreeSitterParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn test_parse_rust_function() {
@@ -1059,7 +1058,7 @@ export function helper(x: number): number {
 
         let file = parser.parse_file(Path::new("test.ts"), content).unwrap();
 
-        assert!(file.imports.len() >= 1);
+        assert!(!file.imports.is_empty());
         assert!(file.symbols.iter().any(|s| s.name == "MyClass"));
         assert!(file.symbols.iter().any(|s| s.name == "helper"));
     }
@@ -1084,7 +1083,7 @@ def helper(x: int) -> int:
 
         let file = parser.parse_file(Path::new("test.py"), content).unwrap();
 
-        assert!(file.imports.len() >= 1);
+        assert!(!file.imports.is_empty());
         assert!(file.symbols.iter().any(|s| s.name == "MyClass"));
         assert!(file.symbols.iter().any(|s| s.name == "helper"));
         assert!(file.symbols.iter().any(|s| s.name == "__init__"));
